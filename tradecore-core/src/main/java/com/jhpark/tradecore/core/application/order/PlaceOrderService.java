@@ -2,6 +2,7 @@ package com.jhpark.tradecore.core.application.order;
 
 import com.jhpark.tradecore.core.account.Account;
 import com.jhpark.tradecore.core.application.port.out.AccountRepository;
+import com.jhpark.tradecore.core.application.port.out.OrderRepository;
 import com.jhpark.tradecore.core.balance.Asset;
 import com.jhpark.tradecore.core.order.Order;
 import com.jhpark.tradecore.core.order.OrderId;

@@ -89,6 +89,60 @@ public final class Order {
         );
     }
 
+    public Order cancel() {
+        if (!canCancel()) {
+            throw new IllegalStateException("취소할 수 없는 주문 상태입니다. status=" + status);
+        }
+
+        return new Order(
+                this.orderId,
+                this.accountId,
+                this.symbol,
+                this.side,
+                this.type,
+                OrderStatus.CANCELLED,
+                this.price,
+                this.qty,
+                this.filledQty
+        );
+    }
+
+    public Order applyFill(BigDecimal fillQty) {
+        BigDecimal normalizedFillQty = positive(fillQty, "fillQty");
+
+        if (isClosed()) {
+            throw new IllegalStateException("종결된 주문에는 체결을 적용할 수 없습니다. status=" + status);
+        }
+
+        BigDecimal nextFilledQty = this.filledQty.add(normalizedFillQty).stripTrailingZeros();
+
+        if (nextFilledQty.compareTo(this.qty) > 0) {
+            throw new IllegalArgumentException("누적 체결 수량은 주문 수량보다 클 수 없습니다.");
+        }
+
+        OrderStatus nextStatus = determineStatus(nextFilledQty, this.qty);
+
+        return new Order(
+                this.orderId,
+                this.accountId,
+                this.symbol,
+                this.side,
+                this.type,
+                nextStatus,
+                this.price,
+                this.qty,
+                nextFilledQty
+        );
+    }
+
+    public boolean canCancel() {
+        return status == OrderStatus.NEW || status == OrderStatus.PARTIALLY_FILLED;
+    }
+
+    public boolean isClosed() {
+        return status == OrderStatus.FILLED || status == OrderStatus.CANCELLED;
+    }
+
     // 미체결 수량 반환
     public BigDecimal remainingQty() {
         return this.qty.subtract(this.filledQty);
@@ -180,5 +234,17 @@ public final class Order {
         }
 
         return normalized;
+    }
+
+    private static OrderStatus determineStatus(BigDecimal filledQty, BigDecimal qty) {
+        if (filledQty.compareTo(BigDecimal.ZERO) == 0) {
+            return OrderStatus.NEW;
+        }
+
+        if (filledQty.compareTo(qty) == 0) {
+            return OrderStatus.FILLED;
+        }
+
+        return OrderStatus.PARTIALLY_FILLED;
     }
 }

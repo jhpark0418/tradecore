@@ -73,4 +73,47 @@ class BalanceTest {
                 balance.unlock(new BigDecimal("400"))
         );
     }
+
+    @Test
+    void decreaseLockedConsumesLockedBalance() {
+        Balance balance = new Balance(
+                Asset.USDT,
+                new BigDecimal("700"),
+                new BigDecimal("300")
+        );
+
+        Balance updated = balance.decreaseLocked(new BigDecimal("120"));
+
+        assertEquals(0, updated.getAvailable().compareTo(new BigDecimal("700")));
+        assertEquals(0, updated.getLocked().compareTo(new BigDecimal("180")));
+        assertEquals(0, updated.total().compareTo(new BigDecimal("880")));
+    }
+
+    @Test
+    void decreaseLockedFailsWhenLockedIsInsufficient() {
+        Balance balance = new Balance(
+                Asset.USDT,
+                new BigDecimal("700"),
+                new BigDecimal("300")
+        );
+
+        assertThrows(IllegalArgumentException.class, () ->
+                balance.decreaseLocked(new BigDecimal("400"))
+        );
+    }
+
+    @Test
+    void increaseAvailableAddsIncomingAsset() {
+        Balance balance = new Balance(
+                Asset.BTC,
+                new BigDecimal("1.2"),
+                new BigDecimal("0.3")
+        );
+
+        Balance updated = balance.increaseAvailable(new BigDecimal("0.5"));
+
+        assertEquals(0, updated.getAvailable().compareTo(new BigDecimal("1.7")));
+        assertEquals(0, updated.getLocked().compareTo(new BigDecimal("0.3")));
+        assertEquals(0, updated.total().compareTo(new BigDecimal("2.0")));
+    }
 }

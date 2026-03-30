@@ -57,4 +57,32 @@ class AccountTest {
                 account.lock(Asset.USDT, new BigDecimal("200"))
         );
     }
+
+    @Test
+    void decreaseLockedUpdatesOnlyTargetAssetBalance() {
+        Account account = Account.empty(new AccountId("account-1"))
+                .withBalance(new Balance(Asset.USDT, new BigDecimal("700"), new BigDecimal("300")))
+                .withBalance(new Balance(Asset.BTC, new BigDecimal("2"), BigDecimal.ZERO));
+
+        Account updated = account.decreaseLocked(Asset.USDT, new BigDecimal("100"));
+
+        assertEquals(0, updated.getBalance(Asset.USDT).getAvailable().compareTo(new BigDecimal("700")));
+        assertEquals(0, updated.getBalance(Asset.USDT).getLocked().compareTo(new BigDecimal("200")));
+
+        assertEquals(0, updated.getBalance(Asset.BTC).getAvailable().compareTo(new BigDecimal("2")));
+        assertEquals(0, updated.getBalance(Asset.BTC).getLocked().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
+    void increaseAvailableCanCreateOrGrowAssetBalance() {
+        Account account = Account.empty(new AccountId("account-1"))
+                .withBalance(new Balance(Asset.USDT, new BigDecimal("1000"), BigDecimal.ZERO));
+
+        Account updated = account.increaseAvailable(Asset.BTC, new BigDecimal("0.25"));
+
+        assertEquals(0, updated.getBalance(Asset.BTC).getAvailable().compareTo(new BigDecimal("0.25")));
+        assertEquals(0, updated.getBalance(Asset.BTC).getLocked().compareTo(BigDecimal.ZERO));
+
+        assertEquals(0, updated.getBalance(Asset.USDT).getAvailable().compareTo(new BigDecimal("1000")));
+    }
 }

@@ -58,6 +58,18 @@ public class Account {
         return withBalance(updated);
     }
 
+    public Account decreaseLocked(Asset asset, BigDecimal amount) {
+        Balance current = getBalance(asset);
+        Balance updated = current.decreaseLocked(amount);
+        return withBalance(updated);
+    }
+
+    public Account increaseAvailable(Asset asset, BigDecimal amount) {
+        Balance current = getBalance(asset);
+        Balance updated = current.increaseAvailable(amount);
+        return withBalance(updated);
+    }
+
     public AccountId getAccountId() {
         return accountId;
     }

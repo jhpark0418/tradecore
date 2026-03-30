@@ -3,13 +3,11 @@ package com.jhpark.tradecore.core.application.order;
 import com.jhpark.tradecore.core.account.Account;
 import com.jhpark.tradecore.core.account.AccountId;
 import com.jhpark.tradecore.core.application.port.out.AccountRepository;
+import com.jhpark.tradecore.core.application.port.out.OrderRepository;
 import com.jhpark.tradecore.core.balance.Asset;
 import com.jhpark.tradecore.core.balance.Balance;
 import com.jhpark.tradecore.core.market.Symbol;
-import com.jhpark.tradecore.core.order.Order;
-import com.jhpark.tradecore.core.order.OrderSide;
-import com.jhpark.tradecore.core.order.OrderStatus;
-import com.jhpark.tradecore.core.order.OrderType;
+import com.jhpark.tradecore.core.order.*;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -175,6 +173,11 @@ class PlaceOrderServiceTest {
 
     private static class FakeOrderRepository implements OrderRepository {
         private final Map<String, Order> storage = new HashMap<>();
+
+        @Override
+        public Optional<Order> findById(OrderId orderId) {
+            return Optional.ofNullable(storage.get(orderId.value()));
+        }
 
         @Override
         public Order save(Order order) {

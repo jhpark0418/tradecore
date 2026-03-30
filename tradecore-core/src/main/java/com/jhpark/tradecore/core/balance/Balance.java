@@ -62,6 +62,30 @@ public final class Balance {
         );
     }
 
+    public Balance decreaseLocked(BigDecimal amount) {
+        BigDecimal normalizedAmount = positive(amount, "decreaseLocked amount");
+
+        if (locked.compareTo(normalizedAmount) < 0) {
+            throw new IllegalArgumentException("locked 부족");
+        }
+
+        return new Balance(
+                asset,
+                available,
+                locked.subtract(normalizedAmount)
+        );
+    }
+
+    public Balance increaseAvailable(BigDecimal amount) {
+        BigDecimal normalizedAmount = positive(amount, "increaseAvailable amount");
+
+        return new Balance(
+                asset,
+                available.add(normalizedAmount),
+                locked
+        );
+    }
+
     // 총 잔고 반환
     public BigDecimal total() {
         return available.add(locked);
