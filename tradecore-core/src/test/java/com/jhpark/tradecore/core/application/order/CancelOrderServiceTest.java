@@ -2,8 +2,7 @@ package com.jhpark.tradecore.core.application.order;
 
 import com.jhpark.tradecore.core.account.Account;
 import com.jhpark.tradecore.core.account.AccountId;
-import com.jhpark.tradecore.core.application.port.out.AccountRepository;
-import com.jhpark.tradecore.core.application.port.out.OrderRepository;
+import com.jhpark.tradecore.core.application.exception.ConcurrencyConflictException;
 import com.jhpark.tradecore.core.balance.Asset;
 import com.jhpark.tradecore.core.balance.Balance;
 import com.jhpark.tradecore.core.market.Symbol;
@@ -11,12 +10,11 @@ import com.jhpark.tradecore.core.order.Order;
 import com.jhpark.tradecore.core.order.OrderId;
 import com.jhpark.tradecore.core.order.OrderSide;
 import com.jhpark.tradecore.core.order.OrderStatus;
+import com.jhpark.tradecore.core.support.fake.FakeAccountRepository;
+import com.jhpark.tradecore.core.support.fake.FakeOrderRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -182,33 +180,118 @@ class CancelOrderServiceTest {
         );
     }
 
-    private static class FakeAccountRepository implements AccountRepository {
-        private final Map<String, Account> storage = new HashMap<>();
+    @Test
+    void accountSaveConflictShouldBePropagatedWhenCancellingOrder() {
+        FakeAccountRepository accountRepository = new FakeAccountRepository();
+        FakeOrderRepository orderRepository = new FakeOrderRepository();
 
-        @Override
-        public Optional<Account> findById(AccountId accountId) {
-            return Optional.ofNullable(storage.get(accountId.value()));
-        }
+        AccountId accountId = new AccountId("account-1");
+        OrderId orderId = new OrderId("order-conflict-1");
 
-        @Override
-        public Account save(Account account) {
-            storage.put(account.getAccountId().value(), account);;
-            return account;
-        }
+        Account account = Account.empty(accountId)
+                .withBalance(new Balance(Asset.USDT, new BigDecimal("800"), new BigDecimal("200")));
+
+        Order order = Order.newLimitOrder(
+                orderId,
+                accountId,
+                new Symbol(Asset.BTC, Asset.USDT),
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                new BigDecimal("2")
+        );
+
+        accountRepository.save(account);
+        orderRepository.save(order);
+
+        accountRepository.simulateConcurrentUpdateOnNextSave();
+
+        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository);
+
+        assertThrows(ConcurrencyConflictException.class, () ->
+                service.cancel(new CancelOrderCommand(accountId, orderId))
+        );
+
+        Account storedAccount = accountRepository.findById(accountId).orElseThrow();
+        Order storedOrder = orderRepository.findById(orderId).orElseThrow();
+
+        assertEquals(0, storedAccount.getBalance(Asset.USDT).getAvailable().compareTo(new BigDecimal("800")));
+        assertEquals(0, storedAccount.getBalance(Asset.USDT).getLocked().compareTo(new BigDecimal("200")));
+        assertEquals(OrderStatus.NEW, storedOrder.getStatus());
     }
 
-    private static class FakeOrderRepository implements OrderRepository {
-        private final Map<String, Order> storage = new HashMap<>();
+    @Test
+    void cancelOrderShouldUnlockRemainingQuoteBalance() {
+        FakeAccountRepository accountRepository = new FakeAccountRepository();
+        FakeOrderRepository orderRepository = new FakeOrderRepository();
 
-        @Override
-        public Optional<Order> findById(OrderId orderId) {
-            return Optional.ofNullable(storage.get(orderId.value()));
-        }
+        AccountId accountId = new AccountId("account-1");
+        OrderId orderId = new OrderId("order-1");
 
-        @Override
-        public Order save(Order order) {
-            storage.put(order.getOrderId().value(), order);
-            return order;
-        }
+        Account account = Account.empty(accountId)
+                .withBalance(new Balance(Asset.USDT, new BigDecimal("800"), new BigDecimal("200")));
+
+        Order order = Order.newLimitOrder(
+                orderId,
+                accountId,
+                new Symbol(Asset.BTC, Asset.USDT),
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                new BigDecimal("2")
+        );
+
+        accountRepository.save(account);
+        orderRepository.save(order);
+
+        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository);
+
+        service.cancel(new CancelOrderCommand(accountId, orderId));
+
+        Account savedAccount = accountRepository.findById(accountId).orElseThrow();
+        Order savedOrder = orderRepository.findById(orderId).orElseThrow();
+
+        assertEquals(2L, savedAccount.getVersion());
+        assertEquals(0, savedAccount.getBalance(Asset.USDT).getAvailable().compareTo(new BigDecimal("1000")));
+        assertEquals(0, savedAccount.getBalance(Asset.USDT).getLocked().compareTo(BigDecimal.ZERO));
+
+        assertEquals(2L, savedOrder.getVersion());
+        assertEquals(OrderStatus.CANCELLED, savedOrder.getStatus());
+    }
+
+    @Test
+    void cancelOrderShouldPropagateAccountVersionConflict() {
+        FakeAccountRepository accountRepository = new FakeAccountRepository();
+        FakeOrderRepository orderRepository = new FakeOrderRepository();
+
+        AccountId accountId = new AccountId("account-1");
+        OrderId orderId = new OrderId("order-1");
+
+        Account account = Account.empty(accountId)
+                .withBalance(new Balance(Asset.USDT, new BigDecimal("800"), new BigDecimal("200")));
+
+        Order order = Order.newLimitOrder(
+                orderId,
+                accountId,
+                new Symbol(Asset.BTC, Asset.USDT),
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                new BigDecimal("2")
+        );
+
+        accountRepository.save(account);
+        orderRepository.save(order);
+        accountRepository.simulateConcurrentUpdateOnNextSave();
+
+        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository);
+
+        assertThrows(ConcurrencyConflictException.class, () ->
+                service.cancel(new CancelOrderCommand(accountId, orderId))
+        );
+
+        Account storedAccount = accountRepository.findById(accountId).orElseThrow();
+        Order storedOrder = orderRepository.findById(orderId).orElseThrow();
+
+        assertEquals(0, storedAccount.getBalance(Asset.USDT).getAvailable().compareTo(new BigDecimal("800")));
+        assertEquals(0, storedAccount.getBalance(Asset.USDT).getLocked().compareTo(new BigDecimal("200")));
+        assertEquals(OrderStatus.NEW, storedOrder.getStatus());
     }
 }

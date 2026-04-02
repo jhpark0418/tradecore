@@ -2,15 +2,18 @@ package com.jhpark.tradecore.core.application.order;
 
 import com.jhpark.tradecore.core.account.Account;
 import com.jhpark.tradecore.core.account.AccountId;
-import com.jhpark.tradecore.core.application.port.out.AccountRepository;
-import com.jhpark.tradecore.core.application.port.out.OrderRepository;
+import com.jhpark.tradecore.core.application.exception.ConcurrencyConflictException;
 import com.jhpark.tradecore.core.balance.Asset;
 import com.jhpark.tradecore.core.balance.Balance;
+import com.jhpark.tradecore.core.execution.Execution;
+import com.jhpark.tradecore.core.execution.ExecutionId;
 import com.jhpark.tradecore.core.market.Symbol;
 import com.jhpark.tradecore.core.order.Order;
 import com.jhpark.tradecore.core.order.OrderId;
 import com.jhpark.tradecore.core.order.OrderSide;
 import com.jhpark.tradecore.core.order.OrderStatus;
+import com.jhpark.tradecore.core.support.fake.FakeAccountRepository;
+import com.jhpark.tradecore.core.support.fake.FakeOrderRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -20,6 +23,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ApplyExecutionServiceTest {
 
@@ -55,7 +59,7 @@ class ApplyExecutionServiceTest {
         );
 
         ApplyExecutionResult result = service.apply(new ApplyExecutionCommand(
-                new com.jhpark.tradecore.core.execution.ExecutionId("exec-1"),
+                new ExecutionId("exec-1"),
                 orderId,
                 new BigDecimal("100"),
                 new BigDecimal("1")
@@ -100,7 +104,7 @@ class ApplyExecutionServiceTest {
         );
 
         ApplyExecutionResult result = service.apply(new ApplyExecutionCommand(
-                new com.jhpark.tradecore.core.execution.ExecutionId("exec-2"),
+                new ExecutionId("exec-2"),
                 orderId,
                 new BigDecimal("90"),
                 new BigDecimal("1")
@@ -145,7 +149,7 @@ class ApplyExecutionServiceTest {
         );
 
         ApplyExecutionResult result = service.apply(new ApplyExecutionCommand(
-                new com.jhpark.tradecore.core.execution.ExecutionId("exec-3"),
+                new ExecutionId("exec-3"),
                 orderId,
                 new BigDecimal("70000"),
                 new BigDecimal("0.2")
@@ -190,7 +194,7 @@ class ApplyExecutionServiceTest {
         );
 
         ApplyExecutionResult result = service.apply(new ApplyExecutionCommand(
-                new com.jhpark.tradecore.core.execution.ExecutionId("exec-4"),
+                new ExecutionId("exec-4"),
                 orderId,
                 new BigDecimal("100"),
                 new BigDecimal("2")
@@ -236,7 +240,7 @@ class ApplyExecutionServiceTest {
 
         assertThrows(IllegalArgumentException.class, () ->
                 service.apply(new ApplyExecutionCommand(
-                        new com.jhpark.tradecore.core.execution.ExecutionId("exec-5"),
+                        new ExecutionId("exec-5"),
                         orderId,
                         new BigDecimal("100"),
                         new BigDecimal("1")
@@ -277,7 +281,7 @@ class ApplyExecutionServiceTest {
 
         assertThrows(IllegalStateException.class, () ->
                 service.apply(new ApplyExecutionCommand(
-                        new com.jhpark.tradecore.core.execution.ExecutionId("exec-6"),
+                        new ExecutionId("exec-6"),
                         orderId,
                         new BigDecimal("100"),
                         new BigDecimal("0.1")
@@ -318,7 +322,7 @@ class ApplyExecutionServiceTest {
 
         assertThrows(IllegalArgumentException.class, () ->
                 service.apply(new ApplyExecutionCommand(
-                        new com.jhpark.tradecore.core.execution.ExecutionId("exec-7"),
+                        new ExecutionId("exec-7"),
                         orderId,
                         new BigDecimal("110"),
                         new BigDecimal("1")
@@ -359,7 +363,7 @@ class ApplyExecutionServiceTest {
 
         assertThrows(IllegalArgumentException.class, () ->
                 service.apply(new ApplyExecutionCommand(
-                        new com.jhpark.tradecore.core.execution.ExecutionId("exec-8"),
+                        new ExecutionId("exec-8"),
                         orderId,
                         new BigDecimal("69000"),
                         new BigDecimal("0.2")
@@ -399,7 +403,7 @@ class ApplyExecutionServiceTest {
         );
 
         ApplyExecutionResult result = service.apply(new ApplyExecutionCommand(
-                new com.jhpark.tradecore.core.execution.ExecutionId("exec-9"),
+                new ExecutionId("exec-9"),
                 orderId,
                 new BigDecimal("95"),
                 new BigDecimal("1")
@@ -420,8 +424,8 @@ class ApplyExecutionServiceTest {
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-10");
-        com.jhpark.tradecore.core.execution.ExecutionId executionId =
-                new com.jhpark.tradecore.core.execution.ExecutionId("exec-duplicate-1");
+        ExecutionId executionId =
+                new ExecutionId("exec-duplicate-1");
 
         Account account = Account.empty(accountId)
                 .withBalance(new Balance(Asset.USDT, new BigDecimal("800"), new BigDecimal("200")))
@@ -469,15 +473,122 @@ class ApplyExecutionServiceTest {
     }
 
     @Test
-    void sameExecutionIdCannotBeUsedWithDifferentPayload() {
+    void accountSaveConflictShouldBePropagatedWhenApplyingExecution() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
         FakeExecutionRepository executionRepository = new FakeExecutionRepository();
 
         AccountId accountId = new AccountId("account-1");
-        OrderId orderId = new OrderId("order-11");
-        com.jhpark.tradecore.core.execution.ExecutionId executionId =
-                new com.jhpark.tradecore.core.execution.ExecutionId("exec-duplicate-2");
+        OrderId orderId = new OrderId("order-conflict-1");
+
+        Account account = Account.empty(accountId)
+                .withBalance(new Balance(Asset.USDT, new BigDecimal("800"), new BigDecimal("200")))
+                .withBalance(new Balance(Asset.BTC, new BigDecimal("1"), BigDecimal.ZERO));
+
+        Order order = Order.newLimitOrder(
+                orderId,
+                accountId,
+                new Symbol(Asset.BTC, Asset.USDT),
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                new BigDecimal("2")
+        );
+
+        accountRepository.save(account);
+        orderRepository.save(order);
+
+        accountRepository.simulateConcurrentUpdateOnNextSave();
+
+        ApplyExecutionService service = new ApplyExecutionService(
+                accountRepository,
+                orderRepository,
+                executionRepository
+        );
+
+        assertThrows(ConcurrencyConflictException.class, () ->
+                service.apply(new ApplyExecutionCommand(
+                        new ExecutionId("exec-conflict-1"),
+                        orderId,
+                        new BigDecimal("90"),
+                        new BigDecimal("1")
+                ))
+        );
+
+        Account storedAccount = accountRepository.findById(accountId).orElseThrow();
+        Order storedOrder = orderRepository.findById(orderId).orElseThrow();
+
+        assertEquals(0, storedAccount.getBalance(Asset.USDT).getAvailable().compareTo(new BigDecimal("800")));
+        assertEquals(0, storedAccount.getBalance(Asset.USDT).getLocked().compareTo(new BigDecimal("200")));
+        assertEquals(0, storedAccount.getBalance(Asset.BTC).getAvailable().compareTo(new BigDecimal("1")));
+
+        assertEquals(OrderStatus.NEW, storedOrder.getStatus());
+        assertEquals(0, storedOrder.getFilledQty().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
+    void cancelledOrderCannotBeExecuted() {
+        FakeAccountRepository accountRepository = new FakeAccountRepository();
+        FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+
+        AccountId accountId = new AccountId("account-1");
+        OrderId orderId = new OrderId("order-cancelled-1");
+        ExecutionId executionId =
+                new ExecutionId("exec-cancelled-1");
+
+        Account account = Account.empty(accountId)
+                .withBalance(new Balance(Asset.USDT, new BigDecimal("1000"), BigDecimal.ZERO))
+                .withBalance(new Balance(Asset.BTC, new BigDecimal("1"), BigDecimal.ZERO));
+
+        Order order = Order.newLimitOrder(
+                orderId,
+                accountId,
+                new Symbol(Asset.BTC, Asset.USDT),
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                new BigDecimal("2")
+        ).cancel();
+
+        accountRepository.save(account);
+        orderRepository.save(order);
+
+        ApplyExecutionService service = new ApplyExecutionService(
+                accountRepository,
+                orderRepository,
+                executionRepository
+        );
+
+        assertThrows(IllegalStateException.class, () ->
+                service.apply(new ApplyExecutionCommand(
+                        executionId,
+                        orderId,
+                        new BigDecimal("100"),
+                        new BigDecimal("0.5")
+                ))
+        );
+
+        Account storedAccount = accountRepository.findById(accountId).orElseThrow();
+        Order storedOrder = orderRepository.findById(orderId).orElseThrow();
+
+        assertEquals(0, storedAccount.getBalance(Asset.USDT).getAvailable().compareTo(new BigDecimal("1000")));
+        assertEquals(0, storedAccount.getBalance(Asset.USDT).getLocked().compareTo(BigDecimal.ZERO));
+        assertEquals(0, storedAccount.getBalance(Asset.BTC).getAvailable().compareTo(new BigDecimal("1")));
+
+        assertEquals(OrderStatus.CANCELLED, storedOrder.getStatus());
+        assertEquals(0, storedOrder.getFilledQty().compareTo(BigDecimal.ZERO));
+
+        assertEquals(Optional.empty(), executionRepository.findById(executionId));
+    }
+
+    @Test
+    void sameExecutionIdWithDifferentPayloadShouldFail() {
+        FakeAccountRepository accountRepository = new FakeAccountRepository();
+        FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+
+        AccountId accountId = new AccountId("account-1");
+        OrderId orderId = new OrderId("order-1");
+        ExecutionId executionId = new ExecutionId("exec-1");
 
         Account account = Account.empty(accountId)
                 .withBalance(new Balance(Asset.USDT, new BigDecimal("800"), new BigDecimal("200")))
@@ -508,60 +619,194 @@ class ApplyExecutionServiceTest {
                 new BigDecimal("1")
         ));
 
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(ConcurrencyConflictException.class, () ->
                 service.apply(new ApplyExecutionCommand(
                         executionId,
                         orderId,
-                        new BigDecimal("91"),
+                        new BigDecimal("95"),
                         new BigDecimal("1")
                 ))
         );
     }
 
-    private static class FakeAccountRepository implements AccountRepository {
-        private final Map<String, Account> storage = new HashMap<>();
+    @Test
+    void sameExecutionIdWithSamePayloadShouldBeIdempotent() {
+        FakeAccountRepository accountRepository = new FakeAccountRepository();
+        FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeExecutionRepository executionRepository = new FakeExecutionRepository();
 
-        @Override
-        public Optional<Account> findById(AccountId accountId) {
-            return Optional.ofNullable(storage.get(accountId.value()));
-        }
+        AccountId accountId = new AccountId("account-1");
+        OrderId orderId = new OrderId("order-1");
+        ExecutionId executionId = new ExecutionId("exec-1");
 
-        @Override
-        public Account save(Account account) {
-            storage.put(account.getAccountId().value(), account);
-            return account;
-        }
+        Account account = Account.empty(accountId)
+                .withBalance(new Balance(Asset.USDT, new BigDecimal("800"), new BigDecimal("200")))
+                .withBalance(new Balance(Asset.BTC, new BigDecimal("1"), BigDecimal.ZERO));
+
+        Order order = Order.newLimitOrder(
+                orderId,
+                accountId,
+                new Symbol(Asset.BTC, Asset.USDT),
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                new BigDecimal("2")
+        );
+
+        accountRepository.save(account);
+        orderRepository.save(order);
+
+        ApplyExecutionService service = new ApplyExecutionService(
+                accountRepository,
+                orderRepository,
+                executionRepository
+        );
+
+        service.apply(new ApplyExecutionCommand(
+                executionId,
+                orderId,
+                new BigDecimal("90"),
+                new BigDecimal("1")
+        ));
+
+        service.apply(new ApplyExecutionCommand(
+                executionId,
+                orderId,
+                new BigDecimal("90"),
+                new BigDecimal("1")
+        ));
+
+        Order storedOrder = orderRepository.findById(orderId).orElseThrow();
+        assertEquals(0, storedOrder.getFilledQty().compareTo(new BigDecimal("1")));
     }
 
-    private static class FakeOrderRepository implements OrderRepository {
-        private final Map<String, Order> storage = new HashMap<>();
+    @Test
+    void applyExecutionShouldUpdateOrderAndPersistExecution() {
+        FakeAccountRepository accountRepository = new FakeAccountRepository();
+        FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeExecutionRepository executionRepository = new FakeExecutionRepository();
 
-        @Override
-        public Optional<Order> findById(OrderId orderId) {
-            return Optional.ofNullable(storage.get(orderId.value()));
-        }
+        AccountId accountId = new AccountId("account-1");
+        OrderId orderId = new OrderId("order-1");
+        ExecutionId executionId = new ExecutionId("exec-1");
 
-        @Override
-        public Order save(Order order) {
-            storage.put(order.getOrderId().value(), order);
-            return order;
-        }
+        Account account = Account.empty(accountId)
+                .withBalance(new Balance(Asset.USDT, new BigDecimal("800"), new BigDecimal("200")))
+                .withBalance(new Balance(Asset.BTC, new BigDecimal("1"), BigDecimal.ZERO));
+
+        Order order = Order.newLimitOrder(
+                orderId,
+                accountId,
+                new Symbol(Asset.BTC, Asset.USDT),
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                new BigDecimal("2")
+        );
+
+        accountRepository.save(account);
+        orderRepository.save(order);
+
+        ApplyExecutionService service = new ApplyExecutionService(
+                accountRepository,
+                orderRepository,
+                executionRepository
+        );
+
+        service.apply(new ApplyExecutionCommand(
+                executionId,
+                orderId,
+                new BigDecimal("90"),
+                new BigDecimal("1")
+        ));
+
+        Order savedOrder = orderRepository.findById(orderId).orElseThrow();
+
+        assertEquals(2L, savedOrder.getVersion());
+        assertEquals(OrderStatus.PARTIALLY_FILLED, savedOrder.getStatus());
+        assertEquals(0, savedOrder.getFilledQty().compareTo(new BigDecimal("1")));
+        assertTrue(executionRepository.findById(executionId).isPresent());
+    }
+
+    @Test
+    void applyExecutionShouldPropagateAccountVersionConflict() {
+        FakeAccountRepository accountRepository = new FakeAccountRepository();
+        FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+
+        AccountId accountId = new AccountId("account-1");
+        OrderId orderId = new OrderId("order-1");
+        ExecutionId executionId = new ExecutionId("exec-1");
+
+        Account account = Account.empty(accountId)
+                .withBalance(new Balance(Asset.USDT, new BigDecimal("800"), new BigDecimal("200")))
+                .withBalance(new Balance(Asset.BTC, new BigDecimal("1"), BigDecimal.ZERO));
+
+        Order order = Order.newLimitOrder(
+                orderId,
+                accountId,
+                new Symbol(Asset.BTC, Asset.USDT),
+                OrderSide.BUY,
+                new BigDecimal("100"),
+                new BigDecimal("2")
+        );
+
+        accountRepository.save(account);
+        orderRepository.save(order);
+        accountRepository.simulateConcurrentUpdateOnNextSave();
+
+        ApplyExecutionService service = new ApplyExecutionService(
+                accountRepository,
+                orderRepository,
+                executionRepository
+        );
+
+        assertThrows(ConcurrencyConflictException.class, () ->
+                service.apply(new ApplyExecutionCommand(
+                        executionId,
+                        orderId,
+                        new BigDecimal("90"),
+                        new BigDecimal("1")
+                ))
+        );
+
+        Order storedOrder = orderRepository.findById(orderId).orElseThrow();
+
+        assertEquals(OrderStatus.NEW, storedOrder.getStatus());
+        assertEquals(0, storedOrder.getFilledQty().compareTo(BigDecimal.ZERO));
+        assertTrue(executionRepository.findById(executionId).isEmpty());
     }
 
     private static class FakeExecutionRepository implements com.jhpark.tradecore.core.application.port.out.ExecutionRepository {
-        private final Map<String, com.jhpark.tradecore.core.execution.Execution> storage = new HashMap<>();
+        private final Map<String, Execution> storage = new HashMap<>();
 
         @Override
-        public Optional<com.jhpark.tradecore.core.execution.Execution> findById(
-                com.jhpark.tradecore.core.execution.ExecutionId executionId
+        public Optional<Execution> findById(
+                ExecutionId executionId
         ) {
             return Optional.ofNullable(storage.get(executionId.value()));
         }
 
         @Override
-        public com.jhpark.tradecore.core.execution.Execution save(
-                com.jhpark.tradecore.core.execution.Execution execution
+        public Execution save(
+                Execution execution
         ) {
+            Execution existing = storage.get(execution.getExecutionId().value());
+
+            if (existing != null) {
+                boolean samePayload =
+                        existing.getOrderId().equals(execution.getOrderId())
+                                && existing.getExecutionPrice().compareTo(execution.getExecutionPrice()) == 0
+                                && existing.getExecutionQty().compareTo(execution.getExecutionQty()) == 0;
+
+                if (!samePayload) {
+                    throw new ConcurrencyConflictException(
+                            "Execution conflict occurred for executionId=" + execution.getExecutionId().value()
+                    );
+                }
+
+                return existing;
+            }
+
+
             storage.put(execution.getExecutionId().value(), execution);
             return execution;
         }

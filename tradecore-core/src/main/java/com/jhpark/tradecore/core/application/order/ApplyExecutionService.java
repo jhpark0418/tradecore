@@ -1,6 +1,7 @@
 package com.jhpark.tradecore.core.application.order;
 
 import com.jhpark.tradecore.core.account.Account;
+import com.jhpark.tradecore.core.application.exception.ConcurrencyConflictException;
 import com.jhpark.tradecore.core.application.port.out.AccountRepository;
 import com.jhpark.tradecore.core.application.port.out.ExecutionRepository;
 import com.jhpark.tradecore.core.application.port.out.OrderRepository;
@@ -111,15 +112,21 @@ public class ApplyExecutionService {
 
     private void validateDuplicateRequest(Execution existingExecution, ApplyExecutionCommand command) {
         if (!existingExecution.getOrderId().equals(command.orderId())) {
-            throw new IllegalArgumentException("같은 executionId로 다른 orderId를 사용할 수 없습니다.");
+            throw new ConcurrencyConflictException(
+                    "같은 executionId로 다른 orderId를 사용할 수 없습니다. executionId=" + command.executionId().value()
+            );
         }
 
         if (existingExecution.getExecutionPrice().compareTo(command.executionPrice()) != 0) {
-            throw new IllegalArgumentException("같은 executionId로 다른 executionPrice를 사용할 수 없습니다.");
+            throw new ConcurrencyConflictException(
+                    "같은 executionId로 다른 executionPrice를 사용할 수 없습니다. executionId=" + command.executionId().value()
+            );
         }
 
         if (existingExecution.getExecutionQty().compareTo(command.executionQty()) != 0) {
-            throw new IllegalArgumentException("같은 executionId로 다른 executionQty를 사용할 수 없습니다.");
+            throw new ConcurrencyConflictException(
+                    "같은 executionId로 다른 executionQty를 사용할 수 없습니다. executionId=" + command.executionId().value()
+            );
         }
     }
 

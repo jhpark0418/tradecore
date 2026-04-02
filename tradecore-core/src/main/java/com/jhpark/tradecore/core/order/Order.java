@@ -17,6 +17,7 @@ public final class Order {
     private final BigDecimal price;
     private final BigDecimal qty;
     private final BigDecimal filledQty;
+    private final long version;
 
     private Order(
         OrderId orderId,
@@ -27,7 +28,8 @@ public final class Order {
         OrderStatus status,
         BigDecimal price,
         BigDecimal qty,
-        BigDecimal filledQty
+        BigDecimal filledQty,
+        long version
     ) {
         this.orderId = Objects.requireNonNull(orderId, "주문 ID는 null일 수 없습니다.");
         this.accountId = Objects.requireNonNull(accountId, "계정 ID는 null일 수 없습니다.");
@@ -38,6 +40,10 @@ public final class Order {
         this.price = normalizeNullable(price);
         this.qty = positive(qty, "주문 수량");
         this.filledQty = nonNegative(filledQty, "체결 수량");
+        if (version < 0) {
+            throw new IllegalArgumentException("version is negative");
+        }
+        this.version = version;
 
         validatePriceByOrderType(this.type, this.price);
 
@@ -64,7 +70,8 @@ public final class Order {
                 OrderStatus.NEW,
                 price,
                 qty,
-                BigDecimal.ZERO
+                BigDecimal.ZERO,
+                0L
         );
     }
 
@@ -85,7 +92,8 @@ public final class Order {
                 OrderStatus.NEW,
                 null,
                 qty,
-                BigDecimal.ZERO
+                BigDecimal.ZERO,
+                0L
         );
     }
 
@@ -103,7 +111,8 @@ public final class Order {
                 OrderStatus.CANCELLED,
                 this.price,
                 this.qty,
-                this.filledQty
+                this.filledQty,
+                this.version
         );
     }
 
@@ -131,7 +140,27 @@ public final class Order {
                 nextStatus,
                 this.price,
                 this.qty,
-                nextFilledQty
+                nextFilledQty,
+                this.version
+        );
+    }
+
+    public long getVersion() {
+        return version;
+    }
+
+    public Order withVersion(long version) {
+        return new Order(
+                this.orderId,
+                this.accountId,
+                this.symbol,
+                this.side,
+                this.type,
+                this.status,
+                this.price,
+                this.qty,
+                this.filledQty,
+                version
         );
     }
 
