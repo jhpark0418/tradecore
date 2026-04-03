@@ -164,6 +164,32 @@ public final class Order {
         );
     }
 
+    public static Order restore(
+            OrderId orderId,
+            AccountId accountId,
+            Symbol symbol,
+            OrderSide side,
+            OrderType type,
+            OrderStatus status,
+            BigDecimal price,
+            BigDecimal qty,
+            BigDecimal filledQty,
+            long version
+    ) {
+        return new Order(
+                orderId,
+                accountId,
+                symbol,
+                side,
+                type,
+                status,
+                price,
+                qty,
+                filledQty,
+                version
+        );
+    }
+
     public boolean canCancel() {
         return status == OrderStatus.NEW || status == OrderStatus.PARTIALLY_FILLED;
     }
