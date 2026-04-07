@@ -34,10 +34,10 @@ TradeCore는 이 문제를 **도메인 모델 중심 구조 + 애플리케이션
 
 | 모듈 | 역할 | 상태 |
 |---|---|---|
-| `tradecore-core` | 순수 도메인 + 애플리케이션 서비스 + 포트 인터페이스 | ✅ 구현 완료 |
-| `tradecore-db` | JPA 엔티티, Repository Adapter, 통합 테스트 | ✅ 구현 완료 |
-| `tradecore-api` | Spring Boot 진입점, REST API 레이어 | ✅ 구현 완료 |
-| `tradecore-infra` | Redis / Kafka 등 외부 연동 | 🔧 확장 예정 |
+| `tradecore-core` | 순수 도메인 + 애플리케이션 서비스 + 포트 인터페이스 | 구현 완료 |
+| `tradecore-db` | JPA 엔티티, Repository Adapter, 통합 테스트 | 구현 완료 |
+| `tradecore-api` | Spring Boot 진입점, REST API 레이어 | 구현 완료 |
+| `tradecore-infra` | Redis / Kafka 등 외부 연동 | 확장 예정 |
 
 ---
 
