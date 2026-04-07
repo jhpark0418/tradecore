@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: tradecore-api
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/cmp
+    username: cmp
+    password: cmp
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+    show-sql: true
+
+server:
+  port: 8080
