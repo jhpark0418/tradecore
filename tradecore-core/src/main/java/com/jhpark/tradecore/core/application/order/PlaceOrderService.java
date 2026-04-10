@@ -1,6 +1,7 @@
 package com.jhpark.tradecore.core.application.order;
 
 import com.jhpark.tradecore.core.account.Account;
+import com.jhpark.tradecore.core.application.exception.ResourceNotFoundException;
 import com.jhpark.tradecore.core.application.port.out.AccountRepository;
 import com.jhpark.tradecore.core.application.port.out.OrderRepository;
 import com.jhpark.tradecore.core.balance.Asset;
@@ -27,7 +28,7 @@ public class PlaceOrderService {
         validate(command);
 
         Account account = accountRepository.findById(command.accountId())
-                .orElseThrow(() -> new IllegalArgumentException("계정을 찾을 수 없습니다. accountId=" + command.accountId().value()));
+                .orElseThrow(() -> new ResourceNotFoundException("계정을 찾을 수 없습니다. accountId=" + command.accountId().value()));
 
         Asset lockAsset = calculateLockAsset(command);
         BigDecimal lockAmount = calculateLockAmount(command);

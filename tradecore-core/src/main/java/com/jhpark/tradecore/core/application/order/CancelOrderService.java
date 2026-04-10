@@ -1,6 +1,7 @@
 package com.jhpark.tradecore.core.application.order;
 
 import com.jhpark.tradecore.core.account.Account;
+import com.jhpark.tradecore.core.application.exception.ResourceNotFoundException;
 import com.jhpark.tradecore.core.application.port.out.AccountRepository;
 import com.jhpark.tradecore.core.application.port.out.OrderRepository;
 import com.jhpark.tradecore.core.balance.Asset;
@@ -27,7 +28,7 @@ public class CancelOrderService {
         Objects.requireNonNull(command.orderId(), "orderId is null");
 
         Order order = orderRepository.findById(command.orderId())
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "주문을 찾을 수 없습니다. orderId=" + command.orderId().value()
                 ));
 
@@ -36,7 +37,7 @@ public class CancelOrderService {
         }
 
         Account account = accountRepository.findById(command.accountId())
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "계정을 찾을 수 없습니다. accountId=" + command.accountId().value()
                 ));
 

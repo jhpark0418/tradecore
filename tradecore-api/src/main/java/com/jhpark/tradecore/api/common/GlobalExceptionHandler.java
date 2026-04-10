@@ -1,6 +1,7 @@
 package com.jhpark.tradecore.api.common;
 
 import com.jhpark.tradecore.core.application.exception.ConcurrencyConflictException;
+import com.jhpark.tradecore.core.application.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
@@ -99,6 +100,19 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problem.setTitle("Invalid State");
         problem.setType(URI.create("https://example.com/problems/invalid-state"));
+        problem.setProperty("timestamp", Instant.now());
+        problem.setProperty("path", request.getRequestURI());
+        return problem;
+    }
+
+    @ExceptionHandler(UnsupportedOperationException.class)
+    public ProblemDetail handleUnsupportedOperation(
+            UnsupportedOperationException ex,
+            HttpServletRequest request
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problem.setTitle("Unsupported Operation");
+        problem.setType(URI.create("https://example.com/problems/unsupported-operation"));
         problem.setProperty("timestamp", Instant.now());
         problem.setProperty("path", request.getRequestURI());
         return problem;

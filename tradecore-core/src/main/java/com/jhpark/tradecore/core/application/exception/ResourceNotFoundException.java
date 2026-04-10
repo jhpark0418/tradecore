@@ -1,4 +1,4 @@
-package com.jhpark.tradecore.api.common;
+package com.jhpark.tradecore.core.application.exception;
 
 public class ResourceNotFoundException extends RuntimeException {
     public ResourceNotFoundException(String message) {

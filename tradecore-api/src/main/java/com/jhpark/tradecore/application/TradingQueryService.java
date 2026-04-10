@@ -2,6 +2,7 @@ package com.jhpark.tradecore.application;
 
 import com.jhpark.tradecore.core.account.Account;
 import com.jhpark.tradecore.core.account.AccountId;
+import com.jhpark.tradecore.core.application.exception.ResourceNotFoundException;
 import com.jhpark.tradecore.core.application.port.out.AccountRepository;
 import com.jhpark.tradecore.core.application.port.out.OrderRepository;
 import com.jhpark.tradecore.core.order.Order;
@@ -26,11 +27,11 @@ public class TradingQueryService {
 
     public Account getAccount(String accountId) {
         return accountRepository.findById(new AccountId(accountId))
-                .orElseThrow(() -> new IllegalArgumentException("계정을 찾을 수 없습니다. accountId=" + accountId));
+                .orElseThrow(() -> new ResourceNotFoundException("계정을 찾을 수 없습니다. accountId=" + accountId));
     }
 
     public Order getOrder(String orderId) {
         return orderRepository.findById(new OrderId(orderId))
-                .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다. orderId=" + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("주문을 찾을 수 없습니다. orderId=" + orderId));
     }
 }

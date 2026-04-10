@@ -2,6 +2,7 @@ package com.jhpark.tradecore.core.application.order;
 
 import com.jhpark.tradecore.core.account.Account;
 import com.jhpark.tradecore.core.application.exception.ConcurrencyConflictException;
+import com.jhpark.tradecore.core.application.exception.ResourceNotFoundException;
 import com.jhpark.tradecore.core.application.port.out.AccountRepository;
 import com.jhpark.tradecore.core.application.port.out.ExecutionRepository;
 import com.jhpark.tradecore.core.application.port.out.OrderRepository;
@@ -49,7 +50,7 @@ public class ApplyExecutionService {
         }
 
         Order order = orderRepository.findById(command.orderId())
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "주문을 찾을 수 없습니다. orderId=" + command.orderId().value()
                 ));
 
@@ -68,7 +69,7 @@ public class ApplyExecutionService {
         validateExecutionPrice(order, command.executionPrice());
 
         Account account = accountRepository.findById(order.getAccountId())
-                .orElseThrow(() -> new IllegalArgumentException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "계정을 찾을 수 없습니다. accountId=" + order.getAccountId().value()
                 ));
 
@@ -98,12 +99,12 @@ public class ApplyExecutionService {
         validateDuplicateRequest(existingExecution, command);
 
         Order existingOrder = orderRepository.findById(existingExecution.getOrderId())
-                .orElseThrow(() -> new IllegalStateException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "기존 체결에 연결된 주문을 찾을 수 없습니다. orderId=" + existingExecution.getOrderId().value()
                 ));
 
         Account existingAccount = accountRepository.findById(existingExecution.getAccountId())
-                .orElseThrow(() -> new IllegalStateException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "기존 체결에 연결된 계정을 찾을 수 없습니다. accountId=" + existingExecution.getAccountId().value()
                 ));
 
