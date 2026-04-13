@@ -27,6 +27,7 @@ TradeCore는 이 문제를 **도메인 모델 중심 구조 + 애플리케이션
 | Build | Gradle 9.4 (멀티모듈) |
 | Framework | Spring Boot 4.0.4 |
 | Persistence | Spring Data JPA, PostgreSQL 17 |
+| Migration | Flyway |
 | Test (Unit) | JUnit 5, Fake Repository |
 | Test (Integration) | Testcontainers (PostgreSQL 17) |
 
@@ -64,15 +65,17 @@ core
 ├─ execution    # Execution, ExecutionId
 └─ application
    ├─ order     # PlaceOrderService / CancelOrderService / ApplyExecutionService
-   ├─ port.out  # AccountRepository, OrderRepository, ExecutionRepository 포트
-   └─ exception # ConcurrencyConflictException
+   ├─ query     # OrderSummary, OrderSearchCondition, PageResult
+   ├─ port.out  # AccountRepository, OrderRepository, ExecutionRepository, OrderQueryRepository 포트
+   └─ exception # ConcurrencyConflictException, ResourceNotFoundException
 ```
 
 ### tradecore-db 주요 패키지
 
 ```text
 db
-├─ adapter      # AccountRepositoryAdapter, OrderRepositoryAdapter, ExecutionRepositoryAdapter
+├─ adapter      # AccountRepositoryAdapter, OrderRepositoryAdapter,
+│               # ExecutionRepositoryAdapter, OrderQueryRepositoryAdapter
 ├─ entity       # AccountEntity, AccountBalanceEntity, OrderEntity, ExecutionEntity
 └─ repository   # Spring Data JPA Repository 인터페이스
 ```
@@ -81,10 +84,10 @@ db
 
 ```text
 api
-├─ account      # AccountQueryController
+├─ account      # AccountQueryController (계정 조회 + 주문 목록 조회)
 ├─ order        # OrderCommandController, OrderQueryController
 ├─ execution    # ExecutionCommandController
-├─ common       # GlobalExceptionHandler, ResourceNotFoundException
+├─ common       # GlobalExceptionHandler, PageResponse
 ├─ bootstrap    # DemoDataInitializer
 ├─ application  # TradingCommandFacade, TradingQueryService
 └─ config       # TradeCoreUseCaseConfig
@@ -158,6 +161,16 @@ PARTIALLY_FILLED → CANCELLED
 | 상태 반영 | `filledQty`, `status` 동시 갱신 |
 
 체결 반영은 단순 상태 변경이 아니라 **주문 상태 + 계정 잔고 + execution 기록**을 함께 갱신하는 핵심 유스케이스로 설계되어 있습니다.
+
+### 4-6. 주문 목록 조회 (`TradingQueryService` + `OrderQueryRepositoryAdapter`)
+
+Command/Query를 명확히 분리하여 조회 전용 서비스(`TradingQueryService`)와 조회 전용 포트(`OrderQueryRepository`)를 별도로 운영합니다.
+
+- 계정별 주문 목록을 `symbol`, `status`, `side` 조건으로 필터링
+- `createdAt desc` 기준 정렬
+- 페이지네이션 (`page` / `size`) 지원 (최대 size 100)
+- JPQL 동적 쿼리로 구현 (`OrderQueryRepositoryAdapter`)
+- 응답에 `totalElements`, `totalPages`, `hasNext` 포함
 
 ---
 
@@ -244,6 +257,57 @@ private Long version;
 
 ---
 
+### 주문 목록 조회
+
+#### `GET /api/accounts/{accountId}/orders`
+
+계정 기준으로 주문 목록을 조회합니다. 필터 조건은 모두 선택 사항이며, 결과는 `createdAt` 내림차순으로 정렬됩니다.
+
+**쿼리 파라미터**
+
+| 파라미터 | 필수 | 설명 | 기본값 |
+|---|---|---|---|
+| `symbol` | N | 심볼 필터 (예: `BTCUSDT`) | — |
+| `status` | N | 주문 상태 필터 (`NEW`, `PARTIALLY_FILLED`, `FILLED`, `CANCELLED`) | — |
+| `side` | N | 주문 방향 필터 (`BUY`, `SELL`) | — |
+| `page` | N | 페이지 번호 (0부터 시작) | `0` |
+| `size` | N | 페이지 크기 (1 ~ 100) | `20` |
+
+**요청 예시**
+```
+GET /api/accounts/demo-user-1/orders?symbol=BTCUSDT&status=NEW&page=0&size=10
+```
+
+**응답 예시** (HTTP 200 OK)
+```json
+{
+  "content": [
+    {
+      "orderId": "550e8400-e29b-41d4-a716-446655440000",
+      "accountId": "demo-user-1",
+      "symbol": "BTCUSDT",
+      "side": "BUY",
+      "orderType": "LIMIT",
+      "status": "NEW",
+      "price": "90000",
+      "qty": "0.1",
+      "filledQty": "0",
+      "remainingQty": "0.1",
+      "version": 1,
+      "createdAt": "2026-04-13T10:00:00Z",
+      "updatedAt": "2026-04-13T10:00:00Z"
+    }
+  ],
+  "page": 0,
+  "size": 10,
+  "totalElements": 1,
+  "totalPages": 1,
+  "hasNext": false
+}
+```
+
+---
+
 ### 주문
 
 #### `POST /api/orders` — 주문 생성 (현재 LIMIT 주문만 지원)
@@ -297,7 +361,7 @@ private Long version;
 }
 ```
 
-#### `GET /api/orders/{orderId}` — 주문 조회
+#### `GET /api/orders/{orderId}` — 단건 주문 조회
 
 ---
 
@@ -339,7 +403,38 @@ private Long version;
 
 ---
 
-## 8. 데모 계정
+## 8. DB 스키마 (Flyway)
+
+Flyway가 활성화되어 있으며 애플리케이션 시작 시 자동으로 마이그레이션을 실행합니다.
+
+| 버전 | 파일 | 내용 |
+|---|---|---|
+| V1 | `V1__init_tradecore_schema.sql` | `accounts`, `account_balances`, `orders`, `executions` 테이블 생성, 인덱스 생성 |
+| V2 | `V2__add_order_audit_columns.sql` | `orders` 테이블에 `created_at`, `updated_at` 컬럼 추가, 복합 인덱스 `(account_id, created_at desc)` 생성 |
+
+```sql
+-- orders 테이블 주요 구조
+create table if not exists orders (
+    order_id    varchar(100)    not null,
+    account_id  varchar(100)    not null,
+    base_asset  varchar(20)     not null,
+    quote_asset varchar(20)     not null,
+    side        varchar(20)     not null,
+    order_type  varchar(20)     not null,
+    status      varchar(30)     not null,
+    price       numeric(30, 12),
+    qty         numeric(30, 12) not null,
+    filled_qty  numeric(30, 12) not null,
+    version     bigint          not null,
+    created_at  timestamptz     not null default now(),
+    updated_at  timestamptz     not null default now(),
+    constraint pk_orders primary key (order_id)
+);
+```
+
+---
+
+## 9. 데모 계정
 
 애플리케이션 최초 실행 시 `DemoDataInitializer`가 아래 계정을 자동 생성합니다.
 
@@ -351,7 +446,7 @@ private Long version;
 
 ---
 
-## 9. 테스트 구조
+## 10. 테스트 구조
 
 TradeCore는 두 가지 계층의 테스트를 갖습니다.
 
@@ -380,12 +475,24 @@ TradeCore는 두 가지 계층의 테스트를 갖습니다.
 | `AccountRepositoryAdapterTest` | JPA 저장/조회, `@Version` 충돌 감지 |
 | `OrderRepositoryAdapterTest` | JPA 저장/조회, `@Version` 충돌 감지 |
 | `ExecutionRepositoryAdapterTest` | 체결 기록 저장/조회, 중복 ID 충돌 감지 |
+| `OrderQueryRepositoryAdapterTest` | 동적 필터 검색, 페이지네이션, 정렬 검증 |
+
+### API Test (`tradecore-api`, MockMvc)
+
+MockMvc 기반으로 컨트롤러 레이어를 격리 검증합니다.
+
+| 테스트 클래스 | 검증 내용 |
+|---|---|
+| `AccountQueryControllerTest` | 계정 조회, 주문 목록 조회 (필터/페이지네이션), 404 처리 |
+| `OrderCommandControllerTest` | 주문 생성, 취소, 유효성 검증, 에러 응답 |
+| `OrderQueryControllerTest` | 단건 주문 조회, 404 처리 |
+| `ExecutionCommandControllerTest` | 체결 반영, 멱등 처리, 에러 응답 |
 
 포트폴리오 관점에서 이 프로젝트는 "기능이 된다"보다 **정합성이 깨지지 않는다**를 테스트로 증명하는 방향을 강조합니다.
 
 ---
 
-## 10. 실행 방법
+## 11. 실행 방법
 
 ### 사전 요구사항
 
@@ -400,10 +507,22 @@ TradeCore는 두 가지 계층의 테스트를 갖습니다.
 ```yaml
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/tradecore
+    url: jdbc:postgresql://localhost:5432/tradecore?currentSchema=tradecore
     username: tradecore
     password: tradecore
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    default-schema: tradecore
+    schemas: tradecore
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
 ```
+
+> Flyway가 활성화되어 있어 `ddl-auto: validate` 모드로 동작합니다. 스키마를 수동으로 생성할 필요 없이 애플리케이션 시작 시 자동 마이그레이션됩니다.
 
 ### API 실행
 
@@ -440,7 +559,7 @@ curl http://localhost:8080/api/ping
 
 ---
 
-## 11. 설계 문서
+## 12. 설계 문서
 
 ### `docs/concurrency-policy.md`
 
@@ -454,7 +573,7 @@ curl http://localhost:8080/api/ping
 
 ---
 
-## 12. 이 프로젝트에서 강조하고 싶은 점
+## 13. 이 프로젝트에서 강조하고 싶은 점
 
 ### 1) 거래 도메인에 맞는 모델링
 이커머스식 상품/재고가 아닌, 거래 시스템에 맞는 개념인 `Symbol`, `Account`, `Balance`, `Order`, `Execution` 중심으로 모델링했습니다.
@@ -471,15 +590,16 @@ curl http://localhost:8080/api/ping
 ### 5) 테스트 가능한 코어 우선 설계
 실제 DB/인프라 의존 없이도 거래 핵심 규칙을 검증할 수 있도록 core 중심으로 먼저 설계했습니다.
 
+### 6) Command / Query 분리
+명령(주문 생성/취소/체결)과 조회(계정/주문 목록)를 `TradingCommandFacade` / `TradingQueryService`로 분리하고, 조회 전용 포트(`OrderQueryRepository`)와 동적 JPQL 어댑터(`OrderQueryRepositoryAdapter`)를 별도로 운영합니다.
+
 ---
 
-## 13. 향후 확장 계획
+## 14. 향후 확장 계획
 
 ### 단기
 - application.yml 환경 분리 (dev / test / prod Profile)
-- Flyway 기반 DB 마이그레이션 도입
 - Swagger / OpenAPI 문서 자동화
-- 주문 목록 조회 API (계정별 필터링, 페이지네이션)
 
 ### 중기
 - Redis 기반 분산락 / idempotency 지원
@@ -494,6 +614,6 @@ curl http://localhost:8080/api/ping
 
 ---
 
-## 14. 한 줄 요약
+## 15. 한 줄 요약
 
 **TradeCore는 "주문이 들어오면 저장한다" 수준이 아니라, 거래 시스템에서 가장 중요한 정합성과 동시성 문제를 Java 도메인 모델 → JPA 영속성까지 일관되게 설계하고 테스트로 증명한 Trading Core 프로젝트입니다.**
