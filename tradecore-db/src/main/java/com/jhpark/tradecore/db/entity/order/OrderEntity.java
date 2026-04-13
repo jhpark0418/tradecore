@@ -9,10 +9,13 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.Objects;
 
 @Entity
@@ -59,6 +62,12 @@ public class OrderEntity {
     @Column(name = "version", nullable = false)
     private Long version;
 
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private OffsetDateTime updatedAt;
+
     protected OrderEntity() {
     }
 
@@ -86,6 +95,18 @@ public class OrderEntity {
         this.qty = Objects.requireNonNull(qty, "qty is null");
         this.filledQty = Objects.requireNonNull(filledQty, "filledQty is null");
         this.version = version;
+    }
+
+    @PrePersist
+    void prePersist() {
+        OffsetDateTime now = OffsetDateTime.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        this.updatedAt = OffsetDateTime.now();
     }
 
     public void updateFrom(
@@ -142,5 +163,13 @@ public class OrderEntity {
 
     public Long getVersion() {
         return version;
+    }
+
+    public OffsetDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public OffsetDateTime getUpdatedAt() {
+        return updatedAt;
     }
 }
