@@ -2,6 +2,7 @@ package com.jhpark.tradecore.api.account;
 
 import com.jhpark.tradecore.api.account.response.AccountResponse;
 import com.jhpark.tradecore.api.common.PageResponse;
+import com.jhpark.tradecore.api.execution.response.ExecutionSummaryResponse;
 import com.jhpark.tradecore.api.order.response.OrderSummaryResponse;
 import com.jhpark.tradecore.application.TradingQueryService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,6 +39,21 @@ public class AccountQueryController {
         return PageResponse.from(
                 tradingQueryService.getOrders(accountId, symbol, status, side, page, size),
                 OrderSummaryResponse::from
+        );
+    }
+
+    @GetMapping("/api/accounts/{accountId}/executions")
+    public PageResponse<ExecutionSummaryResponse> getExecutionsByAccount(
+            @PathVariable String accountId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        validatePage(page);
+        validateSize(size);
+
+        return PageResponse.from(
+                tradingQueryService.getExecutionsByAccount(accountId, page, size),
+                ExecutionSummaryResponse::from
         );
     }
 
