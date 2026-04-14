@@ -2,28 +2,5 @@ spring:
   application:
     name: tradecore-api
 
-  datasource:
-    url: jdbc:postgresql://localhost:5432/cmp?currentSchema=tradecore
-    username: cmp
-    password: cmp
-    driver-class-name: org.postgresql.Driver
-
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-    default-schema: tradecore
-    schemas: tradecore
-
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    properties:
-      hibernate:
-        default_schema: tradecore
-        format_sql: true
-        jdbc:
-          time_zone: UTC
-    show-sql: true
-
 server:
   port: 8080

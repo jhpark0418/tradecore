@@ -4,7 +4,8 @@ import com.jhpark.tradecore.core.application.port.out.OrderQueryRepository;
 import com.jhpark.tradecore.core.application.query.OrderSearchCondition;
 import com.jhpark.tradecore.core.application.query.OrderSummary;
 import com.jhpark.tradecore.core.application.query.PageResult;
-import com.jhpark.tradecore.core.balance.Asset;
+import com.jhpark.tradecore.core.market.Symbol;
+import com.jhpark.tradecore.core.market.SymbolParser;
 import com.jhpark.tradecore.core.order.OrderSide;
 import com.jhpark.tradecore.core.order.OrderStatus;
 import com.jhpark.tradecore.db.entity.order.OrderEntity;
@@ -36,10 +37,10 @@ public class OrderQueryRepositoryAdapter implements OrderQueryRepository {
         params.put("accountId", condition.accountId());
 
         if (hasText(condition.symbol())) {
-            SymbolParts symbolParts = parseSymbol(condition.symbol());
+            Symbol symbol = SymbolParser.parse(condition.symbol());
             where.append(" and o.baseAsset = :baseAsset and o.quoteAsset = :quoteAsset");
-            params.put("baseAsset", symbolParts.baseAsset());
-            params.put("quoteAsset", symbolParts.quoteAsset());
+            params.put("baseAsset", symbol.baseAsset());
+            params.put("quoteAsset", symbol.quoteAsset());
         }
 
         if (hasText(condition.status())) {
@@ -117,26 +118,5 @@ public class OrderQueryRepositoryAdapter implements OrderQueryRepository {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
-    }
-
-    private SymbolParts parseSymbol(String symbol) {
-        String normalized = symbol.trim().toUpperCase(Locale.ROOT);
-
-        for (Asset baseAsset : Asset.values()) {
-            for (Asset quoteAsset : Asset.values()) {
-                if (baseAsset == quoteAsset) {
-                    continue;
-                }
-
-                if ((baseAsset.name() +quoteAsset.name()).equals(normalized)) {
-                    return new SymbolParts(baseAsset, quoteAsset);
-                }
-            }
-        }
-
-        throw new IllegalArgumentException("지원하지 않는 symbol 입니다. symbol=" + symbol);
-    }
-
-    private record SymbolParts(Asset baseAsset, Asset quoteAsset) {
     }
 }

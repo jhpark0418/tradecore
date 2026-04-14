@@ -8,11 +8,13 @@ import com.jhpark.tradecore.core.balance.Balance;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 import java.math.BigDecimal;
 import java.util.Map;
 
 @Configuration
+@Profile("local")
 public class DemoDataInitializer {
 
     @Bean

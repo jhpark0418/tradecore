@@ -16,6 +16,8 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ContextConfiguration;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -28,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(OrderRepositoryAdapter.class)
 @ContextConfiguration(classes = DbTestApplication.class)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
 class OrderRepositoryAdapterTest extends PostgresJpaTestSupport {
 
     @Autowired
@@ -86,5 +89,25 @@ class OrderRepositoryAdapterTest extends PostgresJpaTestSupport {
         );
 
         assertTrue(exception.getMessage().contains("order-2"));
+    }
+
+    @Test
+    void newOrderWithNonZeroVersionThrowsConcurrencyConflict() {
+        Order invalid = Order.newLimitOrder(
+                new OrderId("order-3"),
+                new AccountId("account-1"),
+                new Symbol(Asset.BTC, Asset.USDT),
+                OrderSide.BUY,
+                new BigDecimal("73000"),
+                new BigDecimal("0.3")
+        ).withVersion(1L);
+
+        ConcurrencyConflictException exception = assertThrows(
+                ConcurrencyConflictException.class,
+                () -> orderRepositoryAdapter.save(invalid)
+        );
+
+        assertTrue(exception.getMessage().contains("New order must start with version 0"));
+        assertTrue(exception.getMessage().contains("order-3"));
     }
 }

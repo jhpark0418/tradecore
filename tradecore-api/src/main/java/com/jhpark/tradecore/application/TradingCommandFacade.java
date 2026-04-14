@@ -15,9 +15,8 @@ import com.jhpark.tradecore.core.application.order.CancelOrderService;
 import com.jhpark.tradecore.core.application.order.PlaceOrderCommand;
 import com.jhpark.tradecore.core.application.order.PlaceOrderResult;
 import com.jhpark.tradecore.core.application.order.PlaceOrderService;
-import com.jhpark.tradecore.core.balance.Asset;
 import com.jhpark.tradecore.core.execution.ExecutionId;
-import com.jhpark.tradecore.core.market.Symbol;
+import com.jhpark.tradecore.core.market.SymbolParser;
 import com.jhpark.tradecore.core.order.OrderId;
 import com.jhpark.tradecore.core.order.OrderSide;
 import com.jhpark.tradecore.core.order.OrderType;
@@ -55,7 +54,7 @@ public class TradingCommandFacade {
     ) {
         PlaceOrderCommand command = new PlaceOrderCommand(
                 new AccountId(accountId),
-                parseSymbol(symbol),
+                SymbolParser.parse(symbol),
                 OrderSide.valueOf(side),
                 OrderType.valueOf(orderType),
                 price,
@@ -91,21 +90,5 @@ public class TradingCommandFacade {
         );
 
         return applyExecutionService.apply(command);
-    }
-
-    private Symbol parseSymbol(String symbol) {
-        if (symbol == null || symbol.isBlank()) {
-            throw new IllegalArgumentException("symbol is blank");
-        }
-
-        String normalized = symbol.trim().toUpperCase();
-
-        if (normalized.endsWith("USDT")) {
-            String baseCode = normalized.substring(0, normalized.length() - 4);
-            Asset baseAsset = Asset.valueOf(baseCode);
-            return new Symbol(baseAsset, Asset.USDT);
-        }
-
-        throw new IllegalArgumentException("지원하지 않는 symbol 형식입니다. symbol=" + symbol);
     }
 }

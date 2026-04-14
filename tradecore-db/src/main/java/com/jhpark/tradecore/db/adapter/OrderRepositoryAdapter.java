@@ -8,6 +8,8 @@ import com.jhpark.tradecore.core.order.Order;
 import com.jhpark.tradecore.core.order.OrderId;
 import com.jhpark.tradecore.db.entity.order.OrderEntity;
 import com.jhpark.tradecore.db.repository.OrderJpaRepository;
+import jakarta.persistence.OptimisticLockException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,51 +34,58 @@ public class OrderRepositoryAdapter implements OrderRepository {
     @Override
     @Transactional
     public Order save(Order order) {
-        OrderEntity current = orderJpaRepository.findById(order.getOrderId().value()).orElse(null);
+        try {
+            OrderEntity current = orderJpaRepository.findById(order.getOrderId().value()).orElse(null);
 
-        if (current == null) {
-            if (order.getVersion() != 0L) {
+            if (current == null) {
+                if (order.getVersion() != 0L) {
+                    throw new ConcurrencyConflictException(
+                            "New order must start with version 0. orderId=" + order.getOrderId().value()
+                    );
+                }
+
+                OrderEntity created = new OrderEntity(
+                        order.getOrderId().value(),
+                        order.getAccountId().value(),
+                        order.getSymbol().baseAsset(),
+                        order.getSymbol().quoteAsset(),
+                        order.getSide(),
+                        order.getType(),
+                        order.getStatus(),
+                        order.getPrice(),
+                        order.getQty(),
+                        order.getFilledQty(),
+                        null
+                );
+
+                OrderEntity saved = orderJpaRepository.saveAndFlush(created);
+                return toDomain(saved);
+            }
+
+            long currentVersion = current.getVersion() == null ? 0L : current.getVersion();
+            if (order.getVersion() != currentVersion) {
                 throw new ConcurrencyConflictException(
-                        "New order must start with version 0. orderId=" + order.getOrderId().value()
+                        "Order version conflict occurred for orderId=" + order.getOrderId().value()
+                                + ", expected=" + currentVersion
+                                + ", actual=" + order.getVersion()
                 );
             }
 
-            OrderEntity created = new OrderEntity(
-                    order.getOrderId().value(),
-                    order.getAccountId().value(),
-                    order.getSymbol().baseAsset(),
-                    order.getSymbol().quoteAsset(),
-                    order.getSide(),
-                    order.getType(),
+            current.updateFrom(
                     order.getStatus(),
                     order.getPrice(),
                     order.getQty(),
-                    order.getFilledQty(),
-                    null
+                    order.getFilledQty()
             );
 
-            OrderEntity saved = orderJpaRepository.saveAndFlush(created);
+            OrderEntity saved = orderJpaRepository.saveAndFlush(current);
             return toDomain(saved);
-        }
-
-        long currentVersion = current.getVersion() == null ? 0L : current.getVersion();
-        if (order.getVersion() != currentVersion) {
+        } catch (ObjectOptimisticLockingFailureException | OptimisticLockException e) {
             throw new ConcurrencyConflictException(
-                    "Order version conflict occurred for orderId=" + order.getOrderId().value()
-                            + ", expected=" + currentVersion
-                            + ", actual=" + order.getVersion()
+                    "Order version conflict occurred for orderId=" + order.getOrderId().value(),
+                    e
             );
         }
-
-        current.updateFrom(
-                order.getStatus(),
-                order.getPrice(),
-                order.getQty(),
-                order.getFilledQty()
-        );
-
-        OrderEntity saved = orderJpaRepository.saveAndFlush(current);
-        return toDomain(saved);
     }
 
     private OrderEntity toEntity(Order order) {
