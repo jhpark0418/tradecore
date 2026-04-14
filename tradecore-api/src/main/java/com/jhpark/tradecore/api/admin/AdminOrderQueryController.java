@@ -1,41 +1,33 @@
-package com.jhpark.tradecore.api.account;
+package com.jhpark.tradecore.api.admin;
 
-import com.jhpark.tradecore.api.account.response.AccountResponse;
 import com.jhpark.tradecore.api.common.PageResponse;
-import com.jhpark.tradecore.api.execution.response.ExecutionSummaryResponse;
 import com.jhpark.tradecore.api.order.response.OrderSummaryResponse;
 import com.jhpark.tradecore.application.TradingQueryService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.OffsetDateTime;
 
 @RestController
-public class AccountQueryController {
+public class AdminOrderQueryController {
 
     private final TradingQueryService tradingQueryService;
 
-    public AccountQueryController(TradingQueryService tradingQueryService) {
+    public AdminOrderQueryController(TradingQueryService tradingQueryService) {
         this.tradingQueryService = tradingQueryService;
     }
 
-    @GetMapping("/api/accounts/{accountId}")
-    public AccountResponse getAccount(@PathVariable String accountId) {
-        return AccountResponse.from(tradingQueryService.getAccount(accountId));
-    }
-
-    @GetMapping("/api/accounts/{accountId}/orders")
-    public PageResponse<OrderSummaryResponse> getOrders(
-            @PathVariable String accountId,
+    @GetMapping("/api/admin/orders")
+    public PageResponse<OrderSummaryResponse> searchOrders(
             @RequestParam(required = false) String symbol,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String side,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
             OffsetDateTime createdFrom,
+            @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
             OffsetDateTime createdTo,
             @RequestParam(defaultValue = "0") int page,
@@ -46,8 +38,7 @@ public class AccountQueryController {
         validateCreatedRange(createdFrom, createdTo);
 
         return PageResponse.from(
-                tradingQueryService.getOrders(
-                        accountId,
+                tradingQueryService.searchOrders(
                         symbol,
                         status,
                         side,
@@ -57,21 +48,6 @@ public class AccountQueryController {
                         size
                 ),
                 OrderSummaryResponse::from
-        );
-    }
-
-    @GetMapping("/api/accounts/{accountId}/executions")
-    public PageResponse<ExecutionSummaryResponse> getExecutionsByAccount(
-            @PathVariable String accountId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
-    ) {
-        validatePage(page);
-        validateSize(size);
-
-        return PageResponse.from(
-                tradingQueryService.getExecutionsByAccount(accountId, page, size),
-                ExecutionSummaryResponse::from
         );
     }
 

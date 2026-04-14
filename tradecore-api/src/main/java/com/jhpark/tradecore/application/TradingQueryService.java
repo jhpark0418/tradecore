@@ -15,6 +15,7 @@ import com.jhpark.tradecore.core.order.Order;
 import com.jhpark.tradecore.core.order.OrderId;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -65,6 +66,58 @@ public class TradingQueryService {
                         symbol,
                         status,
                         side,
+                        null,
+                        null,
+                        page,
+                        size
+                )
+        );
+    }
+
+    public PageResult<OrderSummary> getOrders(
+            String accountId,
+            String symbol,
+            String status,
+            String side,
+            OffsetDateTime createdFrom,
+            OffsetDateTime createdTo,
+            int page,
+            int size
+    ) {
+        accountRepository.findById(new AccountId(accountId))
+                .orElseThrow(() -> new ResourceNotFoundException("계정을 찾을 수 없습니다. accountId=" + accountId));
+
+        return orderQueryRepository.search(
+                new OrderSearchCondition(
+                        accountId,
+                        symbol,
+                        status,
+                        side,
+                        createdFrom,
+                        createdTo,
+                        page,
+                        size
+                )
+        );
+    }
+
+    public PageResult<OrderSummary> searchOrders(
+            String symbol,
+            String status,
+            String side,
+            OffsetDateTime createdFrom,
+            OffsetDateTime createdTo,
+            int page,
+            int size
+    ) {
+        return orderQueryRepository.search(
+                new OrderSearchCondition(
+                        null,
+                        symbol,
+                        status,
+                        side,
+                        createdFrom,
+                        createdTo,
                         page,
                         size
                 )

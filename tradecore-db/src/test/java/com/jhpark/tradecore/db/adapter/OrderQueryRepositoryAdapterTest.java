@@ -229,6 +229,111 @@ class OrderQueryRepositoryAdapterTest extends PostgresJpaTestSupport {
         assertEquals("order-002", result.content().get(1).orderId());
     }
 
+    @Test
+    void search_appliesCreatedRangeFilter() {
+        persistOrder(
+                "order-001",
+                "account-1",
+                Asset.BTC,
+                Asset.USDT,
+                OrderSide.BUY,
+                OrderStatus.NEW,
+                new BigDecimal("70000"),
+                new BigDecimal("0.1"),
+                BigDecimal.ZERO,
+                OffsetDateTime.parse("2026-04-01T00:00:00Z")
+        );
+
+        persistOrder(
+                "order-002",
+                "account-1",
+                Asset.BTC,
+                Asset.USDT,
+                OrderSide.BUY,
+                OrderStatus.NEW,
+                new BigDecimal("71000"),
+                new BigDecimal("0.2"),
+                BigDecimal.ZERO,
+                OffsetDateTime.parse("2026-04-10T00:00:00Z")
+        );
+
+        persistOrder(
+                "order-003",
+                "account-1",
+                Asset.BTC,
+                Asset.USDT,
+                OrderSide.BUY,
+                OrderStatus.NEW,
+                new BigDecimal("72000"),
+                new BigDecimal("0.3"),
+                BigDecimal.ZERO,
+                OffsetDateTime.parse("2026-04-20T00:00:00Z")
+        );
+
+        OrderSearchCondition condition = new OrderSearchCondition(
+                "account-1",
+                null,
+                null,
+                null,
+                OffsetDateTime.parse("2026-04-05T00:00:00Z"),
+                OffsetDateTime.parse("2026-04-15T23:59:59Z"),
+                0,
+                20
+        );
+
+        PageResult<OrderSummary> result = orderQueryRepositoryAdapter.search(condition);
+
+        assertEquals(1, result.content().size());
+        assertEquals(1L, result.totalElements());
+        assertEquals("order-002", result.content().get(0).orderId());
+    }
+
+    @Test
+    void search_appliesCreatedFromOnly() {
+        persistOrder(
+                "order-011",
+                "account-1",
+                Asset.ETH,
+                Asset.USDT,
+                OrderSide.SELL,
+                OrderStatus.NEW,
+                new BigDecimal("3000"),
+                new BigDecimal("1"),
+                BigDecimal.ZERO,
+                OffsetDateTime.parse("2026-04-01T00:00:00Z")
+        );
+
+        persistOrder(
+                "order-012",
+                "account-1",
+                Asset.ETH,
+                Asset.USDT,
+                OrderSide.SELL,
+                OrderStatus.NEW,
+                new BigDecimal("3200"),
+                new BigDecimal("1"),
+                BigDecimal.ZERO,
+                OffsetDateTime.parse("2026-04-18T00:00:00Z")
+        );
+
+        OrderSearchCondition condition = new OrderSearchCondition(
+                "account-1",
+                null,
+                null,
+                null,
+                OffsetDateTime.parse("2026-04-10T00:00:00Z"),
+                null,
+                0,
+                20
+        );
+
+        PageResult<OrderSummary> result = orderQueryRepositoryAdapter.search(condition);
+
+        assertEquals(1, result.content().size());
+        assertEquals(1L, result.totalElements());
+        assertEquals("order-012", result.content().get(0).orderId());
+    }
+
     private void persistOrder(
             String orderId,
             String accountId,

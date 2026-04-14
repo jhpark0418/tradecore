@@ -22,6 +22,8 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -126,6 +128,8 @@ class AccountQueryControllerTest {
                 eq("BTCUSDT"),
                 eq("NEW"),
                 eq("BUY"),
+                eq(null),
+                eq(null),
                 eq(0),
                 eq(20)
         )).willReturn(result);
@@ -159,6 +163,8 @@ class AccountQueryControllerTest {
     void getOrders_returns404_whenAccountNotFound() throws Exception {
         given(tradingQueryService.getOrders(
                 eq("missing-account"),
+                eq(null),
+                eq(null),
                 eq(null),
                 eq(null),
                 eq(null),
@@ -277,5 +283,82 @@ class AccountQueryControllerTest {
                         .param("size", "20"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid Request"));
+    }
+
+    @Test
+    void getOrders_acceptsCreatedRangeFilters() throws Exception {
+        OffsetDateTime createdFrom = OffsetDateTime.parse("2026-04-01T00:00:00+09:00");
+        OffsetDateTime createdTo = OffsetDateTime.parse("2026-04-14T23:59:59+09:00");
+
+        PageResult<OrderSummary> result = new PageResult<>(
+                List.of(),
+                0,
+                20,
+                0L,
+                0,
+                false
+        );
+
+        given(tradingQueryService.getOrders(
+                "demo-user-1",
+                "BTCUSDT",
+                "NEW",
+                "BUY",
+                createdFrom,
+                createdTo,
+                0,
+                20
+        )).willReturn(result);
+
+        mockMvc.perform(get("/api/accounts/{accountId}/orders", "demo-user-1")
+                        .param("symbol", "BTCUSDT")
+                        .param("status", "NEW")
+                        .param("side", "BUY")
+                        .param("createdFrom", "2026-04-01T00:00:00+09:00")
+                        .param("createdTo", "2026-04-14T23:59:59+09:00")
+                        .param("page", "0")
+                        .param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content.length()").value(0))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0))
+                .andExpect(jsonPath("$.hasNext").value(false));
+
+        then(tradingQueryService).should().getOrders(
+                "demo-user-1",
+                "BTCUSDT",
+                "NEW",
+                "BUY",
+                createdFrom,
+                createdTo,
+                0,
+                20
+        );
+    }
+
+    @Test
+    void getOrders_returns400_whenCreatedFromIsAfterCreatedTo() throws Exception {
+        mockMvc.perform(get("/api/accounts/{accountId}/orders", "demo-user-1")
+                        .param("createdFrom", "2026-04-15T00:00:00+09:00")
+                        .param("createdTo", "2026-04-14T23:59:59+09:00")
+                        .param("page", "0")
+                        .param("size", "20"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid Request"))
+                .andExpect(jsonPath("$.detail").value("createdFrom은 createdTo 이전 이어야 합니다."));
+
+        then(tradingQueryService).should(never()).getOrders(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt()
+        );
     }
 }

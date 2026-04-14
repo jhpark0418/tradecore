@@ -53,6 +53,16 @@ public class OrderQueryRepositoryAdapter implements OrderQueryRepository {
             params.put("side", OrderSide.valueOf(condition.side().trim().toUpperCase(Locale.ROOT)));
         }
 
+        if (condition.createdFrom() != null) {
+            where.append(" and o.createdAt >= :createdFrom");
+            params.put("createdFrom", condition.createdFrom());
+        }
+
+        if (condition.createdTo() != null) {
+            where.append(" and o.createdAt <= :createdTo");
+            params.put("createdTo", condition.createdTo());
+        }
+
         String contentJpql = """
                 select o
                 from OrderEntity o
