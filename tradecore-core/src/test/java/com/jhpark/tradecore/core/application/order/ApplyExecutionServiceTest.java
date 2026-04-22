@@ -14,6 +14,7 @@ import com.jhpark.tradecore.core.order.OrderSide;
 import com.jhpark.tradecore.core.order.OrderStatus;
 import com.jhpark.tradecore.core.support.fake.FakeAccountRepository;
 import com.jhpark.tradecore.core.support.fake.FakeOrderRepository;
+import com.jhpark.tradecore.core.support.fake.FakeOutboxEventRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -31,6 +32,7 @@ class ApplyExecutionServiceTest {
     void buyLimitOrderExecutionAtSamePriceDecreasesLockedQuoteAndIncreasesBase() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-1");
@@ -55,7 +57,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         ApplyExecutionResult result = service.apply(new ApplyExecutionCommand(
@@ -76,6 +79,7 @@ class ApplyExecutionServiceTest {
     void buyLimitOrderExecutionAtBetterPriceRefundsDifference() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-2");
@@ -100,7 +104,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         ApplyExecutionResult result = service.apply(new ApplyExecutionCommand(
@@ -121,6 +126,7 @@ class ApplyExecutionServiceTest {
     void sellLimitOrderExecutionAtSamePriceDecreasesLockedBaseAndIncreasesQuote() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-3");
@@ -145,7 +151,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         ApplyExecutionResult result = service.apply(new ApplyExecutionCommand(
@@ -166,6 +173,7 @@ class ApplyExecutionServiceTest {
     void fullExecutionMakesOrderFilled() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-4");
@@ -190,7 +198,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         ApplyExecutionResult result = service.apply(new ApplyExecutionCommand(
@@ -211,6 +220,7 @@ class ApplyExecutionServiceTest {
     void executionQtyCannotExceedRemainingQty() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-5");
@@ -235,7 +245,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         assertThrows(IllegalArgumentException.class, () ->
@@ -252,6 +263,7 @@ class ApplyExecutionServiceTest {
     void filledOrderCannotBeExecutedAgain() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-6");
@@ -276,7 +288,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         assertThrows(IllegalStateException.class, () ->
@@ -293,6 +306,7 @@ class ApplyExecutionServiceTest {
     void buyLimitOrderCannotBeExecutedAboveLimitPrice() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-7");
@@ -317,7 +331,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         assertThrows(IllegalArgumentException.class, () ->
@@ -334,6 +349,7 @@ class ApplyExecutionServiceTest {
     void sellLimitOrderCannotBeExecutedBelowLimitPrice() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-8");
@@ -358,7 +374,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         assertThrows(IllegalArgumentException.class, () ->
@@ -376,6 +393,7 @@ class ApplyExecutionServiceTest {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
         FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-9");
@@ -399,7 +417,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         ApplyExecutionResult result = service.apply(new ApplyExecutionCommand(
@@ -421,6 +440,7 @@ class ApplyExecutionServiceTest {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
         FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-10");
@@ -446,7 +466,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         ApplyExecutionCommand command = new ApplyExecutionCommand(
@@ -477,6 +498,7 @@ class ApplyExecutionServiceTest {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
         FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-conflict-1");
@@ -502,7 +524,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         assertThrows(ConcurrencyConflictException.class, () ->
@@ -530,6 +553,7 @@ class ApplyExecutionServiceTest {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
         FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-cancelled-1");
@@ -555,7 +579,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         assertThrows(IllegalStateException.class, () ->
@@ -585,6 +610,7 @@ class ApplyExecutionServiceTest {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
         FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-1");
@@ -609,7 +635,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         service.apply(new ApplyExecutionCommand(
@@ -634,6 +661,7 @@ class ApplyExecutionServiceTest {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
         FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-1");
@@ -658,7 +686,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         service.apply(new ApplyExecutionCommand(
@@ -684,6 +713,7 @@ class ApplyExecutionServiceTest {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
         FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-1");
@@ -708,7 +738,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         service.apply(new ApplyExecutionCommand(
@@ -731,6 +762,7 @@ class ApplyExecutionServiceTest {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
         FakeExecutionRepository executionRepository = new FakeExecutionRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-1");
@@ -756,7 +788,8 @@ class ApplyExecutionServiceTest {
         ApplyExecutionService service = new ApplyExecutionService(
                 accountRepository,
                 orderRepository,
-                executionRepository
+                executionRepository,
+                outboxEventRepository
         );
 
         assertThrows(ConcurrencyConflictException.class, () ->

@@ -2,8 +2,11 @@ package com.jhpark.tradecore.core.application.order;
 
 import com.jhpark.tradecore.core.account.Account;
 import com.jhpark.tradecore.core.application.exception.ResourceNotFoundException;
+import com.jhpark.tradecore.core.application.outbox.OutboxEvent;
+import com.jhpark.tradecore.core.application.outbox.OutboxStatus;
 import com.jhpark.tradecore.core.application.port.out.AccountRepository;
 import com.jhpark.tradecore.core.application.port.out.OrderRepository;
+import com.jhpark.tradecore.core.application.port.out.OutboxEventRepository;
 import com.jhpark.tradecore.core.balance.Asset;
 import com.jhpark.tradecore.core.order.Order;
 import com.jhpark.tradecore.core.order.OrderId;
@@ -11,15 +14,23 @@ import com.jhpark.tradecore.core.order.OrderSide;
 import com.jhpark.tradecore.core.order.OrderType;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Objects;
+import java.util.UUID;
 
 public class PlaceOrderService {
     private final AccountRepository accountRepository;
     private final OrderRepository orderRepository;
+    OutboxEventRepository outboxEventRepository;
 
-    public PlaceOrderService(AccountRepository accountRepository, OrderRepository orderRepository) {
+    public PlaceOrderService(
+            AccountRepository accountRepository,
+            OrderRepository orderRepository,
+            OutboxEventRepository outboxEventRepository
+    ) {
         this.accountRepository = Objects.requireNonNull(accountRepository, "accountRepository is null");
         this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository is null");
+        this.outboxEventRepository = Objects.requireNonNull(outboxEventRepository, "outboxEventRepository is null");
     }
 
     public PlaceOrderResult place(PlaceOrderCommand command) {
@@ -47,7 +58,41 @@ public class PlaceOrderService {
         Account savedAccount = accountRepository.save(lockedAccount);
         Order savedOrder = orderRepository.save(order);
 
+        outboxEventRepository.save(new OutboxEvent(
+                UUID.randomUUID().toString(),
+                "ORDER",
+                savedOrder.getOrderId().value(),
+                "ORDER_PLACED",
+                buildOrderPlacePayload(savedOrder),
+                OutboxStatus.PENDING,
+                Instant.now()
+        ));
+
         return new PlaceOrderResult(savedAccount, savedOrder);
+    }
+
+    private String buildOrderPlacePayload(Order order) {
+        return """
+                {
+                    "orderId":"%s",
+                    "accountId":"%s",
+                    "symbol":"%s",
+                    "side":"%s",
+                    "orderType":"%s",
+                    "price":"%s",
+                    "qty":"%s",
+                    "status":"%s"
+                }
+                """.formatted(
+                order.getOrderId().value(),
+                order.getAccountId().value(),
+                order.getSymbol().value(),
+                order.getSide().name(),
+                order.getType().name(),
+                order.getPrice().toPlainString(),
+                order.getQty().toPlainString(),
+                order.getStatus().name()
+        );
     }
 
     private void validate(PlaceOrderCommand command) {

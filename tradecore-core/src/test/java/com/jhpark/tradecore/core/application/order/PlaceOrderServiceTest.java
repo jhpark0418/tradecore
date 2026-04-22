@@ -12,6 +12,7 @@ import com.jhpark.tradecore.core.order.OrderStatus;
 import com.jhpark.tradecore.core.order.OrderType;
 import com.jhpark.tradecore.core.support.fake.FakeAccountRepository;
 import com.jhpark.tradecore.core.support.fake.FakeOrderRepository;
+import com.jhpark.tradecore.core.support.fake.FakeOutboxEventRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -24,6 +25,7 @@ class PlaceOrderServiceTest {
     void buyLimitOrderLocksQuoteAsset() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         Account account = Account.empty(accountId)
@@ -32,7 +34,7 @@ class PlaceOrderServiceTest {
 
         accountRepository.save(account);
 
-        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository);
+        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         PlaceOrderCommand command = new PlaceOrderCommand(
                 accountId,
@@ -49,12 +51,17 @@ class PlaceOrderServiceTest {
         assertEquals(0, result.account().getBalance(Asset.USDT).getLocked().compareTo(new BigDecimal("200")));
         assertEquals(OrderStatus.NEW, result.order().getStatus());
         assertEquals(OrderType.LIMIT, result.order().getType());
+        assertEquals(1, outboxEventRepository.size());
+        assertEquals("ORDER_PLACED", outboxEventRepository.get(0).getEventType());
+        assertEquals("ORDER", outboxEventRepository.get(0).getAggregateType());
+        assertEquals(result.order().getOrderId().value(), outboxEventRepository.get(0).getAggregateId());
     }
 
     @Test
     void sellLimitOrderLocksBaseAsset() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         Account account = Account.empty(accountId)
@@ -63,7 +70,7 @@ class PlaceOrderServiceTest {
 
         accountRepository.save(account);
 
-        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository);
+        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         PlaceOrderCommand command = new PlaceOrderCommand(
                 accountId,
@@ -85,6 +92,7 @@ class PlaceOrderServiceTest {
     void buyLimitOrderFailsWhenQuoteBalanceIsInsufficient() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         Account account = Account.empty(accountId)
@@ -93,7 +101,7 @@ class PlaceOrderServiceTest {
 
         accountRepository.save(account);
 
-        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository);
+        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         PlaceOrderCommand command = new PlaceOrderCommand(
                 accountId,
@@ -111,6 +119,7 @@ class PlaceOrderServiceTest {
     void sellLimitOrderFailsWhenBaseBalanceIsInsufficient() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         Account account = Account.empty(accountId)
@@ -119,7 +128,7 @@ class PlaceOrderServiceTest {
 
         accountRepository.save(account);
 
-        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository);
+        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         PlaceOrderCommand command = new PlaceOrderCommand(
                 accountId,
@@ -137,6 +146,7 @@ class PlaceOrderServiceTest {
     void marketOrderIsNotSupportedForNow() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         Account account = Account.empty(accountId)
@@ -144,7 +154,7 @@ class PlaceOrderServiceTest {
 
         accountRepository.save(account);
 
-        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository);
+        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         PlaceOrderCommand command = new PlaceOrderCommand(
                 accountId,
@@ -162,6 +172,7 @@ class PlaceOrderServiceTest {
     void accountSaveConflictShouldBePropagatedWhenPlacingOrder() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         Account account = Account.empty(accountId)
@@ -172,7 +183,7 @@ class PlaceOrderServiceTest {
 
         accountRepository.simulateConcurrentUpdateOnNextSave();
 
-        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository);
+        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         PlaceOrderCommand command = new PlaceOrderCommand(
                 accountId,
@@ -197,6 +208,7 @@ class PlaceOrderServiceTest {
     void placeLimitBuyOrderShouldLockQuoteBalanceAndSaveOrder() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         Account account = Account.empty(accountId)
@@ -205,7 +217,7 @@ class PlaceOrderServiceTest {
 
         accountRepository.save(account);
 
-        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository);
+        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         PlaceOrderResult result = service.place(new PlaceOrderCommand(
                 accountId,
@@ -232,6 +244,7 @@ class PlaceOrderServiceTest {
     void placeOrderShouldPropagateAccountVersionConflict() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         Account account = Account.empty(accountId)
@@ -241,7 +254,7 @@ class PlaceOrderServiceTest {
         accountRepository.save(account);
         accountRepository.simulateConcurrentUpdateOnNextSave();
 
-        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository);
+        PlaceOrderService service = new PlaceOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         assertThrows(ConcurrencyConflictException.class, () ->
                 service.place(new PlaceOrderCommand(

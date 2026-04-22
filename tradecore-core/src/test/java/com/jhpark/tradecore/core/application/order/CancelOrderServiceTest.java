@@ -12,6 +12,7 @@ import com.jhpark.tradecore.core.order.OrderSide;
 import com.jhpark.tradecore.core.order.OrderStatus;
 import com.jhpark.tradecore.core.support.fake.FakeAccountRepository;
 import com.jhpark.tradecore.core.support.fake.FakeOrderRepository;
+import com.jhpark.tradecore.core.support.fake.FakeOutboxEventRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -25,6 +26,7 @@ class CancelOrderServiceTest {
     void cancelBuyOrderUnlocksRemainingQuoteAsset() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-1");
@@ -44,7 +46,7 @@ class CancelOrderServiceTest {
         accountRepository.save(account);
         orderRepository.save(order);
 
-        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository);
+        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         CancelOrderResult result = service.cancel(new CancelOrderCommand(accountId, orderId));
 
@@ -57,6 +59,7 @@ class CancelOrderServiceTest {
     void cancelSellOrderUnlocksRemainingBaseAsset() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-2");
@@ -76,7 +79,7 @@ class CancelOrderServiceTest {
         accountRepository.save(account);
         orderRepository.save(order);
 
-        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository);
+        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         CancelOrderResult result = service.cancel(new CancelOrderCommand(accountId, orderId));
 
@@ -89,6 +92,7 @@ class CancelOrderServiceTest {
     void cancelPartiallyFilledBuyOrderUnlocksOnlyRemainingQuoteAsset() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-3");
@@ -108,7 +112,7 @@ class CancelOrderServiceTest {
         accountRepository.save(account);
         orderRepository.save(order);
 
-        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository);
+        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         CancelOrderResult result = service.cancel(new CancelOrderCommand(accountId, orderId));
 
@@ -122,6 +126,7 @@ class CancelOrderServiceTest {
     void filledOrderCannotBeCancelled() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-4");
@@ -141,7 +146,7 @@ class CancelOrderServiceTest {
         accountRepository.save(account);
         orderRepository.save(order);
 
-        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository);
+        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         assertThrows(IllegalArgumentException.class, () ->
                 service.cancel(new CancelOrderCommand(accountId, orderId))
@@ -152,6 +157,7 @@ class CancelOrderServiceTest {
     void orderOwnerMustMatch() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId ownerId = new AccountId("account-1");
         AccountId otherId = new AccountId("account-2");
@@ -173,7 +179,7 @@ class CancelOrderServiceTest {
 
         orderRepository.save(order);
 
-        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository);
+        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         assertThrows(IllegalArgumentException.class, () ->
                 service.cancel(new CancelOrderCommand(otherId, orderId))
@@ -184,6 +190,7 @@ class CancelOrderServiceTest {
     void accountSaveConflictShouldBePropagatedWhenCancellingOrder() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-conflict-1");
@@ -205,7 +212,7 @@ class CancelOrderServiceTest {
 
         accountRepository.simulateConcurrentUpdateOnNextSave();
 
-        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository);
+        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         assertThrows(ConcurrencyConflictException.class, () ->
                 service.cancel(new CancelOrderCommand(accountId, orderId))
@@ -223,6 +230,7 @@ class CancelOrderServiceTest {
     void cancelOrderShouldUnlockRemainingQuoteBalance() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-1");
@@ -242,7 +250,7 @@ class CancelOrderServiceTest {
         accountRepository.save(account);
         orderRepository.save(order);
 
-        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository);
+        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         service.cancel(new CancelOrderCommand(accountId, orderId));
 
@@ -261,6 +269,7 @@ class CancelOrderServiceTest {
     void cancelOrderShouldPropagateAccountVersionConflict() {
         FakeAccountRepository accountRepository = new FakeAccountRepository();
         FakeOrderRepository orderRepository = new FakeOrderRepository();
+        FakeOutboxEventRepository outboxEventRepository = new FakeOutboxEventRepository();
 
         AccountId accountId = new AccountId("account-1");
         OrderId orderId = new OrderId("order-1");
@@ -281,7 +290,7 @@ class CancelOrderServiceTest {
         orderRepository.save(order);
         accountRepository.simulateConcurrentUpdateOnNextSave();
 
-        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository);
+        CancelOrderService service = new CancelOrderService(accountRepository, orderRepository, outboxEventRepository);
 
         assertThrows(ConcurrencyConflictException.class, () ->
                 service.cancel(new CancelOrderCommand(accountId, orderId))

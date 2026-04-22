@@ -2,24 +2,35 @@ package com.jhpark.tradecore.core.application.order;
 
 import com.jhpark.tradecore.core.account.Account;
 import com.jhpark.tradecore.core.application.exception.ResourceNotFoundException;
+import com.jhpark.tradecore.core.application.outbox.OutboxEvent;
+import com.jhpark.tradecore.core.application.outbox.OutboxStatus;
 import com.jhpark.tradecore.core.application.port.out.AccountRepository;
 import com.jhpark.tradecore.core.application.port.out.OrderRepository;
+import com.jhpark.tradecore.core.application.port.out.OutboxEventRepository;
 import com.jhpark.tradecore.core.balance.Asset;
 import com.jhpark.tradecore.core.order.Order;
 import com.jhpark.tradecore.core.order.OrderSide;
 import com.jhpark.tradecore.core.order.OrderType;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Objects;
+import java.util.UUID;
 
 public class CancelOrderService {
 
     private final AccountRepository accountRepository;
     private final OrderRepository orderRepository;
+    private final OutboxEventRepository outboxEventRepository;
 
-    public CancelOrderService(AccountRepository accountRepository, OrderRepository orderRepository) {
+    public CancelOrderService(
+            AccountRepository accountRepository,
+            OrderRepository orderRepository,
+            OutboxEventRepository outboxEventRepository
+    ) {
         this.accountRepository = Objects.requireNonNull(accountRepository, "accountRepository is null");
         this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository is null");
+        this.outboxEventRepository = Objects.requireNonNull(outboxEventRepository, "outboxEventRepository is null");
     }
 
     public CancelOrderResult cancel(CancelOrderCommand command) {
@@ -50,7 +61,35 @@ public class CancelOrderService {
         Account savedAccount = accountRepository.save(unlockedAccount);
         Order savedOrder = orderRepository.save(canceledOrder);
 
+        outboxEventRepository.save(new OutboxEvent(
+                UUID.randomUUID().toString(),
+                "ORDER",
+                savedOrder.getOrderId().value(),
+                "ORDER_CANCELLED",
+                buildOrderCancelledPayload(savedOrder),
+                OutboxStatus.PENDING,
+                Instant.now()
+        ));
+
         return new CancelOrderResult(savedAccount, savedOrder);
+    }
+
+    private String buildOrderCancelledPayload(Order order) {
+        return """
+            {
+              "orderId":"%s",
+              "accountId":"%s",
+              "status":"%s",
+              "filledQty":"%s",
+              "remainingQty":"%s"
+            }
+            """.formatted(
+                order.getOrderId().value(),
+                order.getAccountId().value(),
+                order.getStatus().name(),
+                order.getFilledQty().toPlainString(),
+                order.remainingQty().toPlainString()
+        );
     }
 
     private Asset calculateUnlockAsset(Order order) {

@@ -3,9 +3,12 @@ package com.jhpark.tradecore.core.application.order;
 import com.jhpark.tradecore.core.account.Account;
 import com.jhpark.tradecore.core.application.exception.ConcurrencyConflictException;
 import com.jhpark.tradecore.core.application.exception.ResourceNotFoundException;
+import com.jhpark.tradecore.core.application.outbox.OutboxEvent;
+import com.jhpark.tradecore.core.application.outbox.OutboxStatus;
 import com.jhpark.tradecore.core.application.port.out.AccountRepository;
 import com.jhpark.tradecore.core.application.port.out.ExecutionRepository;
 import com.jhpark.tradecore.core.application.port.out.OrderRepository;
+import com.jhpark.tradecore.core.application.port.out.OutboxEventRepository;
 import com.jhpark.tradecore.core.balance.Asset;
 import com.jhpark.tradecore.core.execution.Execution;
 import com.jhpark.tradecore.core.order.Order;
@@ -22,18 +25,32 @@ public class ApplyExecutionService {
     private final OrderRepository orderRepository;
     private final ExecutionRepository executionRepository;
     private final Clock clock;
+    private final OutboxEventRepository outboxEventRepository;
 
-    public ApplyExecutionService(AccountRepository accountRepository, OrderRepository orderRepository, ExecutionRepository executionRepository) {
+    public ApplyExecutionService(
+            AccountRepository accountRepository,
+            OrderRepository orderRepository,
+            ExecutionRepository executionRepository,
+            OutboxEventRepository outboxEventRepository
+    ) {
         this.accountRepository = Objects.requireNonNull(accountRepository, "accountRepository is null");
         this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository is null");
         this.executionRepository = Objects.requireNonNull(executionRepository, "executionRepository is null");
+        this.outboxEventRepository = Objects.requireNonNull(outboxEventRepository, "outboxEventRepository is null");
         clock = Clock.systemUTC();
     }
 
-    public ApplyExecutionService(AccountRepository accountRepository, OrderRepository orderRepository, ExecutionRepository executionRepository, Clock clock) {
+    public ApplyExecutionService(
+            AccountRepository accountRepository,
+            OrderRepository orderRepository,
+            ExecutionRepository executionRepository,
+            OutboxEventRepository outboxEventRepository,
+            Clock clock
+    ) {
         this.accountRepository = Objects.requireNonNull(accountRepository, "accountRepository is null");
         this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository is null");
         this.executionRepository = Objects.requireNonNull(executionRepository, "executionRepository is null");
+        this.outboxEventRepository = Objects.requireNonNull(outboxEventRepository, "outboxEventRepository is null");
         this.clock = Objects.requireNonNull(clock, "clock is null");
     }
 
@@ -92,7 +109,39 @@ public class ApplyExecutionService {
         Order savedOrder = orderRepository.save(executedOrder);
         Execution savedExecution = executionRepository.save(execution);
 
+        outboxEventRepository.save(new OutboxEvent(
+                savedExecution.getExecutionId().value(),
+                "EXECUTION",
+                savedExecution.getExecutionId().value(),
+                "EXECUTION_APPLIED",
+                buildExecutionAppliedPayload(savedExecution, savedOrder),
+                OutboxStatus.PENDING,
+                Instant.now(clock)
+        ));
+
         return new ApplyExecutionResult(savedAccount, savedOrder, savedExecution);
+    }
+
+    private String buildExecutionAppliedPayload(Execution execution, Order order) {
+        return """
+            {
+              "executionId":"%s",
+              "orderId":"%s",
+              "accountId":"%s",
+              "executionPrice":"%s",
+              "executionQty":"%s",
+              "orderStatus":"%s",
+              "filledQty":"%s"
+            }
+            """.formatted(
+                execution.getExecutionId().value(),
+                execution.getOrderId().value(),
+                execution.getAccountId().value(),
+                execution.getExecutionPrice().toPlainString(),
+                execution.getExecutionQty().toPlainString(),
+                order.getStatus().name(),
+                order.getFilledQty().toPlainString()
+        );
     }
 
     private ApplyExecutionResult handleDuplicateExecution(Execution existingExecution, ApplyExecutionCommand command) {
