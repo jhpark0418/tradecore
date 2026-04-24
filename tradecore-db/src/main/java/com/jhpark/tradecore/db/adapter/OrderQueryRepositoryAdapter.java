@@ -33,8 +33,11 @@ public class OrderQueryRepositoryAdapter implements OrderQueryRepository {
     public PageResult<OrderSummary> search(OrderSearchCondition condition) {
         Map<String, Object> params = new HashMap<>();
 
-        StringBuilder where = new StringBuilder(" where o.accountId = :accountId");
-        params.put("accountId", condition.accountId());
+        StringBuilder where = new StringBuilder(" where 1 = 1");
+        if (hasText(condition.accountId())) {
+            where.append(" and o.accountId = :accountId");
+            params.put("accountId", condition.accountId());
+        }
 
         if (hasText(condition.symbol())) {
             Symbol symbol = SymbolParser.parse(condition.symbol());

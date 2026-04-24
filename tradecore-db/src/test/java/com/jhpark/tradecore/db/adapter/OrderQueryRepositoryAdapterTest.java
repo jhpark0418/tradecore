@@ -334,6 +334,175 @@ class OrderQueryRepositoryAdapterTest extends PostgresJpaTestSupport {
         assertEquals("order-012", result.content().get(0).orderId());
     }
 
+    @Test
+    void search_returnsAllOrders_whenAccountIdIsNull() {
+        persistOrder(
+                "order-001",
+                "account-1",
+                Asset.BTC,
+                Asset.USDT,
+                OrderSide.BUY,
+                OrderStatus.NEW,
+                new BigDecimal("42000"),
+                new BigDecimal("0.5"),
+                BigDecimal.ZERO,
+                OffsetDateTime.of(2026, 4, 13, 9, 0, 0, 0, ZoneOffset.UTC)
+        );
+
+        persistOrder(
+                "order-002",
+                "account-2",
+                Asset.ETH,
+                Asset.USDT,
+                OrderSide.SELL,
+                OrderStatus.PARTIALLY_FILLED,
+                new BigDecimal("3200"),
+                new BigDecimal("2"),
+                new BigDecimal("0.5"),
+                OffsetDateTime.of(2026, 4, 13, 10, 0, 0, 0, ZoneOffset.UTC)
+        );
+
+        persistOrder(
+                "order-003",
+                "account-1",
+                Asset.BTC,
+                Asset.USDT,
+                OrderSide.BUY,
+                OrderStatus.CANCELLED,
+                new BigDecimal("41000"),
+                new BigDecimal("0.2"),
+                BigDecimal.ZERO,
+                OffsetDateTime.of(2026, 4, 13, 8, 0, 0, 0, ZoneOffset.UTC)
+        );
+
+        PageResult<OrderSummary> result = orderQueryRepositoryAdapter.search(
+                new OrderSearchCondition(null, null, null, null, 0, 10)
+        );
+
+        assertEquals(3, result.content().size());
+        assertEquals(3L, result.totalElements());
+        assertEquals(1, result.totalPages());
+        assertFalse(result.hasNext());
+
+        assertEquals("order-002", result.content().get(0).orderId());
+        assertEquals("account-2", result.content().get(0).accountId());
+
+        assertEquals("order-001", result.content().get(1).orderId());
+        assertEquals("account-1", result.content().get(1).accountId());
+
+        assertEquals("order-003", result.content().get(2).orderId());
+        assertEquals("account-1", result.content().get(2).accountId());
+    }
+
+    @Test
+    void search_appliesFilters_whenAccountIdIsNull() {
+        persistOrder(
+                "order-101",
+                "account-1",
+                Asset.BTC,
+                Asset.USDT,
+                OrderSide.BUY,
+                OrderStatus.NEW,
+                new BigDecimal("42000"),
+                new BigDecimal("0.5"),
+                BigDecimal.ZERO,
+                OffsetDateTime.parse("2026-04-13T09:00:00Z")
+        );
+
+        persistOrder(
+                "order-102",
+                "account-2",
+                Asset.BTC,
+                Asset.USDT,
+                OrderSide.BUY,
+                OrderStatus.NEW,
+                new BigDecimal("42100"),
+                new BigDecimal("0.7"),
+                BigDecimal.ZERO,
+                OffsetDateTime.parse("2026-04-13T10:00:00Z")
+        );
+
+        // symbol mismatch
+        persistOrder(
+                "order-103",
+                "account-3",
+                Asset.ETH,
+                Asset.USDT,
+                OrderSide.BUY,
+                OrderStatus.NEW,
+                new BigDecimal("3200"),
+                new BigDecimal("1"),
+                BigDecimal.ZERO,
+                OffsetDateTime.parse("2026-04-13T11:00:00Z")
+        );
+
+        // side mismatch
+        persistOrder(
+                "order-104",
+                "account-4",
+                Asset.BTC,
+                Asset.USDT,
+                OrderSide.SELL,
+                OrderStatus.NEW,
+                new BigDecimal("42200"),
+                new BigDecimal("0.8"),
+                BigDecimal.ZERO,
+                OffsetDateTime.parse("2026-04-13T12:00:00Z")
+        );
+
+        // status mismatch
+        persistOrder(
+                "order-105",
+                "account-5",
+                Asset.BTC,
+                Asset.USDT,
+                OrderSide.BUY,
+                OrderStatus.CANCELLED,
+                new BigDecimal("42300"),
+                new BigDecimal("0.9"),
+                BigDecimal.ZERO,
+                OffsetDateTime.parse("2026-04-13T13:00:00Z")
+        );
+
+        // created range mismatch
+        persistOrder(
+                "order-106",
+                "account-6",
+                Asset.BTC,
+                Asset.USDT,
+                OrderSide.BUY,
+                OrderStatus.NEW,
+                new BigDecimal("42400"),
+                new BigDecimal("1.0"),
+                BigDecimal.ZERO,
+                OffsetDateTime.parse("2026-04-01T00:00:00Z")
+        );
+
+        OrderSearchCondition condition = new OrderSearchCondition(
+                null,
+                "BTCUSDT",
+                "NEW",
+                "BUY",
+                OffsetDateTime.parse("2026-04-13T00:00:00Z"),
+                OffsetDateTime.parse("2026-04-13T23:59:59Z"),
+                0,
+                10
+        );
+
+        PageResult<OrderSummary> result = orderQueryRepositoryAdapter.search(condition);
+
+        assertEquals(2, result.content().size());
+        assertEquals(2L, result.totalElements());
+        assertEquals(1, result.totalPages());
+        assertFalse(result.hasNext());
+
+        assertEquals("order-102", result.content().get(0).orderId());
+        assertEquals("account-2", result.content().get(0).accountId());
+
+        assertEquals("order-101", result.content().get(1).orderId());
+        assertEquals("account-1", result.content().get(1).accountId());
+    }
+
     private void persistOrder(
             String orderId,
             String accountId,
