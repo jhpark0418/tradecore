@@ -28,8 +28,11 @@ TradeCore는 이 문제를 **도메인 모델 중심 구조 + 애플리케이션
 | Framework | Spring Boot 4.0.4 |
 | Persistence | Spring Data JPA, PostgreSQL 17 |
 | Migration | Flyway |
+| Messaging | Kafka, Spring for Apache Kafka |
+| Infra | Docker, Docker Compose |
 | Test (Unit) | JUnit 5, Fake Repository |
-| Test (Integration) | Testcontainers (PostgreSQL 17) |
+| Test (Integration) | Testcontainers (PostgreSQL 17), MockMvc |
+| Test (Infra) | ApplicationContextRunner, Fake Publisher |
 
 ### 모듈별 역할
 
@@ -38,7 +41,7 @@ TradeCore는 이 문제를 **도메인 모델 중심 구조 + 애플리케이션
 | `tradecore-core` | 순수 도메인 + 애플리케이션 서비스 + 포트 인터페이스 | 구현 완료 |
 | `tradecore-db` | JPA 엔티티, Repository Adapter, 통합 테스트 | 구현 완료 |
 | `tradecore-api` | Spring Boot 진입점, REST API 레이어 | 구현 완료 |
-| `tradecore-infra` | Redis / Kafka 등 외부 연동 | 확장 예정 |
+| `tradecore-infra` | Outbox Relay, Kafka Publisher, topic 설정 등 외부 연동 | Outbox Relay 1차 구현 완료 |
 
 ---
 
@@ -49,7 +52,7 @@ tradecore
 ├─ tradecore-api      # Spring Boot 앱 진입점, REST API 레이어
 ├─ tradecore-core     # 핵심 도메인 및 유스케이스
 ├─ tradecore-db       # JPA 엔티티 + Repository Adapter + Testcontainers 통합 테스트
-├─ tradecore-infra    # Redis/Kafka 등 인프라 모듈 (확장 예정)
+├─ tradecore-infra    # Outbox Relay + Kafka 발행 인프라
 └─ docs
    └─ concurrency-policy.md
 ```
@@ -91,6 +94,18 @@ api
 ├─ bootstrap    # DemoDataInitializer
 ├─ application  # TradingCommandFacade, TradingQueryService
 └─ config       # TradeCoreUseCaseConfig
+```
+
+### tradecore-infra 주요 패키지
+
+```text
+infra
+└─ outbox
+   ├─ OutboxRelay                 # PENDING outbox 이벤트 조회 및 발행 스케줄러
+   ├─ OutboxEventPublisher         # 이벤트 발행 추상화
+   ├─ KafkaOutboxEventPublisher    # KafkaTemplate 기반 이벤트 발행 구현체
+   ├─ OutboxTopicResolver          # eventType → Kafka topic 매핑
+   └─ OutboxTopicsProperties       # topic 이름 설정 바인딩
 ```
 
 ---
@@ -184,30 +199,51 @@ Command/Query를 명확히 분리하여 조회 전용 서비스(`TradingQuerySer
 
 ---
 
-### 4-7. Outbox 저장 구조
+### 4-7. Outbox 저장 + Kafka Relay 발행 구조
 
-주문 생성, 주문 취소, 체결 반영 유스케이스에서 도메인 상태 변경과 함께 Outbox 이벤트를 저장합니다.
+주문 생성, 주문 취소, 체결 반영 유스케이스에서 도메인 상태 변경과 함께 Outbox 이벤트를 저장하고, 별도의 Relay가 `PENDING` 이벤트를 Kafka로 발행합니다.
 
 현재 구현된 이벤트 저장 흐름:
 
-| 유스케이스 | 저장 이벤트 예시 |
-|---|---|
-| 주문 생성 | `OrderPlaced` |
-| 주문 취소 | `OrderCancelled` |
-| 체결 반영 | `ExecutionApplied` |
+| 유스케이스 | 저장 eventType | Kafka topic |
+|---|---|---|
+| 주문 생성 | `ORDER_PLACED` | `tradecore.order.placed` |
+| 주문 취소 | `ORDER_CANCELLED` | `tradecore.order.cancelled` |
+| 체결 반영 | `EXECUTION_APPLIED` | `tradecore.execution.applied` |
+
+```text
+Command API
+ → Core UseCase
+ → DB 상태 변경
+ → outbox_event 저장
+ → OutboxRelay가 PENDING 이벤트 조회
+ → Kafka 발행
+ → 성공 시 PUBLISHED 상태 변경
+ → 실패 시 FAILED/PENDING 재처리 대상 기록
+```
 
 구현 포인트:
-- `OutboxEvent` 도메인 모델 추가
-- `OutboxStatus` 상태값 관리 (`PENDING`, `PUBLISHED`, `FAILED`)
-- `OutboxEventRepository` 포트 추가
-- `FakeOutboxEventRepository`로 core 단위 테스트 지원
-- `outbox_event` 테이블 추가
-- `OutboxEventRepositoryAdapter`로 JPA 저장/조회 구현
-- `findPending(limit)`, `markPublished()`, `markFailed()` 지원
 
-현재 단계에서는 **트랜잭션 안에서 Outbox 이벤트를 저장하는 구조까지 구현**되어 있습니다.
+OutboxEvent 도메인 모델 추가
+OutboxStatus 상태값 관리 (PENDING, PUBLISHED, FAILED)
+OutboxEventRepository 포트 추가
+FakeOutboxEventRepository로 core 단위 테스트 지원
+outbox_event 테이블 추가
+OutboxEventRepositoryAdapter로 JPA 저장/조회 구현
+findPending(limit), markPublished(), markFailed() 지원
+OutboxRelay가 스케줄 기반으로 PENDING 이벤트를 batch 조회
+OutboxTopicResolver가 eventType을 Kafka topic으로 변환
+OutboxTopicsProperties로 topic 이름을 설정 파일에서 관리
+KafkaOutboxEventPublisher가 KafkaTemplate<String, String> 기반으로 메시지 발행
+tradecore.outbox.relay.enabled 설정으로 Relay 활성화/비활성화 가능
 
-다음 단계는 `tradecore-infra` 모듈에서 Outbox Relay를 구현하여 `PENDING` 이벤트를 조회하고 Kafka로 발행한 뒤 `PUBLISHED` 상태로 변경하는 것입니다.
+로컬 Kafka 환경에서 아래 세 이벤트가 모두 topic으로 발행되는 것을 확인했습니다.
+
+```text
+ORDER_PLACED       → tradecore.order.placed
+ORDER_CANCELLED    → tradecore.order.cancelled
+EXECUTION_APPLIED  → tradecore.execution.applied
+```
 
 ---
 
@@ -546,6 +582,17 @@ MockMvc 기반으로 컨트롤러 레이어를 격리 검증합니다.
 
 포트폴리오 관점에서 이 프로젝트는 "기능이 된다"보다 **정합성이 깨지지 않는다**를 테스트로 증명하는 방향을 강조합니다.
 
+### Infra Test (`tradecore-infra`)
+
+Kafka를 실제로 띄우지 않아도 Outbox Relay의 핵심 동작과 조건부 Bean 등록을 검증합니다.
+
+| 테스트 클래스 | 검증 내용 |
+|---|---|
+| `OutboxRelayTest` | PENDING 이벤트 발행, PUBLISHED 처리, 발행 실패 시 markFailed 처리, batchSize 제한 |
+| `OutboxTopicResolverTest` | eventType별 Kafka topic 매핑, 미지원 eventType 예외 처리 |
+| `OutboxRelayConditionTest` | `tradecore.outbox.relay.enabled` 설정에 따른 Relay Bean 등록 조건 검증 |
+| `KafkaOutboxEventPublisherConditionTest` | KafkaTemplate 존재 여부와 enabled 설정에 따른 Kafka Publisher Bean 등록 조건 검증 |
+
 ---
 
 ## 11. 실행 방법
@@ -563,9 +610,10 @@ MockMvc 기반으로 컨트롤러 레이어를 격리 검증합니다.
 ```yaml
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/tradecore?currentSchema=tradecore
-    username: tradecore
-    password: tradecore
+    url: jdbc:postgresql://localhost:5432/cmp?currentSchema=tradecore
+    username: cmp
+    password: cmp
+    driver-class-name: org.postgresql.Driver
 
   flyway:
     enabled: true
@@ -576,6 +624,38 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: tradecore
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+    show-sql: true
+
+  sql:
+    init:
+      mode: never
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+
+tradecore:
+  outbox:
+    relay:
+      enabled: true
+      batch-size: 20
+      fixed-delay-ms: 5000
+    topics:
+      order-placed: tradecore.order.placed
+      order-cancelled: tradecore.order.cancelled
+      execution-applied: tradecore.execution.applied
 ```
 
 > Flyway가 활성화되어 있어 `ddl-auto: validate` 모드로 동작합니다. 스키마를 수동으로 생성할 필요 없이 애플리케이션 시작 시 자동 마이그레이션됩니다.
@@ -654,19 +734,31 @@ curl http://localhost:8080/api/ping
 ## 14. 향후 확장 계획
 
 ### 단기
-- application.yml 환경 분리 (dev / test / prod Profile)
+
+- Outbox Relay 안정화
+    - `FAILED` / `PENDING` 이벤트 재시도 정책 정리
+    - `attempt_count` 제한 및 최종 실패 처리 정책 추가
+    - `last_error` 기록 형식 정리
+    - Relay 운영 로그와 Micrometer 메트릭 추가
+- 다중 인스턴스 대비 Outbox 조회 개선
+    - `FOR UPDATE SKIP LOCKED` 기반 중복 발행 방지
+    - Relay batch 처리 트랜잭션 경계 정리
+- Kafka Testcontainers 기반 통합 테스트 추가
 - Swagger / OpenAPI 문서 자동화
 
 ### 중기
+
 - Redis 기반 분산락 / idempotency 지원
-- Outbox Relay 구현
-- Kafka 이벤트 발행
-- Outbox 이벤트 재처리/복구 전략 설계
+- Kafka consumer 기반 execution 처리 흐름 확장
+- Outbox 이벤트 재처리/복구 API 또는 운영 배치 설계
+- 관리자용 이벤트 발행 이력 조회 API 추가
 
 ### 장기
-- 매칭 엔진 또는 execution consumer와 연동
+
+- 매칭 엔진 또는 외부 execution source와 연동
 - 리스크 체크 / 주문 제한 정책 확장
 - 성능 테스트 및 장애 시나리오 검증
+- 관측 가능성 강화: Prometheus, Grafana, structured logging
 
 ---
 
